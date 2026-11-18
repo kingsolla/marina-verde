@@ -10,11 +10,16 @@ export function helicopterDemand(stars) {
 
 export function createHelicopter(scene, haloTex = null) {
   const group = new THREE.Group();
-  // Polish 2 Q6: dark MVPD body (was pale grey 0xd8dee2 — read as a grey
-  // ball at distance), red stripe, brighter glass. Same part count + tail
-  // fin; the searchlight cone is stronger; a ground shadow blob tracks the
-  // heli (1 extra draw call, no new light). Detection logic untouched.
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x232a33, roughness: 0.4, metalness: 0.35 });
+  // Polish 3 R2 (Sol): light-grey MVPD body 0x9aa7b0 so the heli reads from
+  // below against a bright sky (was dark slate 0x232a33 — a black blob).
+  // No separate belly mesh: body is one mesh / one material, and a belly
+  // mesh would add a draw call with no measured saving (Sol fallback:
+  // body 0x9aa7b0 first). Metalness lowered 0.35 -> 0.1: with no env map,
+  // metalness only darkens the paint. Stripe stays 0xd94040 at 3.6x0.8,
+  // glass stays 0x9fd8e8, rotor 0x222222, nav halo scale 2.4, blur disc
+  // stays deleted. No MVPD text marking exists on the heli (only HUD
+  // panels carry the name) — none added, no label mesh.
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x9aa7b0, roughness: 0.4, metalness: 0.1 });
   // Rounded body: cylinder with sphere ends (capsule-ish), not a box.
   const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4.2, 16), bodyMat);
   body.rotation.x = Math.PI / 2;
@@ -51,10 +56,10 @@ export function createHelicopter(scene, haloTex = null) {
   const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.3), new THREE.MeshLambertMaterial({ color: 0x888888 }));
   tailRotor.position.set(0.4, 0.4, -7);
   group.add(tailRotor);
-  // Tail fin (dark, MVPD livery).
+  // Tail fin (navy 0x1c2733, MVPD livery — Polish 3 R2).
   const tailFin = new THREE.Mesh(
     new THREE.BoxGeometry(0.12, 1.8, 1.4),
-    new THREE.MeshLambertMaterial({ color: 0x232a33 }),
+    new THREE.MeshLambertMaterial({ color: 0x1c2733 }),
   );
   tailFin.position.set(0, 1.1, -6.9);
   group.add(tailFin);

@@ -143,31 +143,70 @@ export function stageShot(name, game, ctx) {
 
   if (name === 'street') {
     // Verde Arms open over the street (SCREENSHOTS.md §4.3): mission 3,
-    // Nico at the gun shop door, the real shop UI open, cash line visible.
-    // Polish 2: bright midday (14:31, like the coastal-day concept) so the
-    // street reads as siang cerah, not dusk.
+    // Nico in the VELOCE GT, the real shop UI open, cash line visible.
+    // Polish 3 R3: staging moved to the BEACHFRONT so the shot is bright
+    // midday (14:31) AND the ferris wheel + beach read in frame.
+    // Wheel geometry (measured, not assumed): the wheel at (-138, 208)
+    // is a torus in the XY plane — it faces NORTH/SOUTH, so from the east
+    // (heading west along the beachfront road) it is EDGE-ON, a sliver.
+    // It only reads face-on looking SOUTH. So the car sits on the
+    // north-south road x=-104 heading SOUTH, camera behind it looking
+    // south-southwest at the wheel (~80 m away, face-on), NOT west.
+    // Audit (Polish 3 §8.4, verified in main.js/shops.js/missions.js):
+    // openShop only sets state='shop'; in that state update() never runs,
+    // so no mission step, police, traffic or proximity check can move the
+    // player, close the shop, or touch cash; closeShop only restores
+    // state='playing' (no teleport, no car change); buyItem only runs on a
+    // click (capture never clicks); startMission only sets index/step. The
+    // staging + camera below live ONLY in this ?shot= branch.
     world.setSkyMode('day');
     game.clock = 14 * 60 + 31;
     startMission(game.missions, game, 2);
     noBanner(game);
-    placePlayer(game, -48.2, -74, Math.PI);
+    const car = spawnSportsCoupe();
+    car.x = -104;
+    car.z = 128;
+    car.heading = 0; // south, down the x=-104 road toward the beach
+    car.mesh.position.set(-104, 0, 128);
+    car.mesh.rotation.y = 0;
+    placePlayer(game, -104, 128, 0);
+    enterCar(car);
+    game.playerCar.speed = 0;
+    game.playerCar.health = 100;
     game.money = 540;
     game.radio.station = 0; // Verde FM
-    // Look EAST down the gunshop road (z=-78) instead of north at a dark
-    // shop wall: the street stays alive at the frame edges — road markings,
-    // a parked car, a lamp, market stalls in the distance. The shop panel
-    // covers the centre, so the life has to live at the edges.
-    game.cameraYaw = Math.PI / 2 - 0.3;
-    game.cameraPitch = 0.3;
-    // One parked car on the south lane, right of frame past the panel.
+    // Camera: 6 m behind the car, ~2.5 m up, looking 8.6° down — close
+    // enough that the VELOCE GT's red rear + tail bar peek out BELOW the
+    // shop panel (at 10.5 m the whole car hid behind it), while the wheel
+    // rim top (~29 m at ~87 m) still lands near the top of the frame,
+    // above the shop panel; the wheel sits right of the panel so its
+    // right leg + side gondolas stay visible past the panel edge.
+    // Yaw +0.10 rad points the lens south-southwest at the wheel.
+    game.cameraDistOverride = 6.0;
+    game.cameraPitch = 0.15;
+    game.cameraYaw = 0.10;
+    // Street life at the frame edges, past the panel: a parked car on the
+    // beachfront road (right, below the wheel) + a yellow taxi crossing
+    // it (left). Both frozen: the game is paused while the shop is open.
     const parked = game.allCars.find((c) => c.driver === null && !c.isPolice);
     if (parked) {
-      parked.x = -24;
-      parked.z = -82.6;
-      parked.heading = Math.PI / 2;
-      parked.mesh.position.set(-24, 0, -82.6);
-      parked.mesh.rotation.y = Math.PI / 2;
+      parked.x = -130;
+      parked.z = 178;
+      parked.heading = -Math.PI / 2;
+      parked.mesh.position.set(-130, 0, 178);
+      parked.mesh.rotation.y = -Math.PI / 2;
     }
+    game.trafficCars.slice(0, 1).forEach((tc) => {
+      tc.x = -64;
+      tc.z = 182;
+      tc.heading = -Math.PI / 2;
+      tc.speed = 0;
+      tc.ai.axis = 'x';
+      tc.ai.dir = -1;
+      tc.mesh.userData.bodyMat.color.setHex(0xf2c230);
+      tc.mesh.position.set(tc.x, 0, tc.z);
+      tc.mesh.rotation.y = tc.heading;
+    });
     const shop = SHOPS.find((s) => s.id === 'gunshop');
     openShop(shop);
     game.objective = '3 · Armed & Ready: Buy an SMG at Verde Arms ($350)';
@@ -222,9 +261,18 @@ export function stageShot(name, game, ctx) {
   game.wanted.stars = 4;
   game.wanted.heat = 0;
   spawnHeliIfNeeded();
-  game.heli.angle = 0.45; // ahead-right of the chase cam (looking east):
-  // the heli must be IN the frame, not behind the camera
-  game.heli.height = 12; // high enough to read as a helicopter, low enough to stay in frame
+  // Polish 3 R2: angle 0.45, height 10, radius 18 (was 12 / 26). Round-2
+  // angle -0.45 hid the heli behind the billboard; 0.45 keeps it clear
+  // top-right. The smaller orbit radius (staging-only) puts the heli
+  // ~27 m from the camera instead of ~35 m, so the body + skids + nav
+  // light read at ~100 px instead of a distant grey ball — the light-grey
+  // body (0x9aa7b0), red stripe, navy fin and dark rotor from
+  // helicopter.js do the rest. (The tail still points away from a chase
+  // cam; the rotor blades are thin and their phase at capture varies.) Orbit height/radius are shot staging;
+  // gameplay orbit (30 m / 26 m) is untouched.
+  game.heli.angle = 0.45;
+  game.heli.height = 10;
+  game.heli.radius = 18;
   spawnPoliceIfNeeded();
   // Police AHEAD of the player (east, in the camera's field of view) in a
   // tight echelon — the chase cam sits WEST of the car looking east, so

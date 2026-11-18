@@ -33,6 +33,10 @@ const SHARED_GEO = {
 };
 const SHARED_MAT = {
   dark: new THREE.MeshLambertMaterial({ color: 0x1c2733 }),
+  // Polish 3 R1 (Sol): shared windshield glass — opaque blue-grey, no
+  // transparency (transparency would cost a draw-call sort + fill). Shared
+  // and immutable, so every car reuses it.
+  glass: new THREE.MeshStandardMaterial({ color: 0x7896a6, roughness: 0.35, metalness: 0.0 }),
   wheel: new THREE.MeshLambertMaterial({ color: 0x141414 }),
   head: new THREE.MeshBasicMaterial({ color: 0xfff6c0 }),
   tail: new THREE.MeshBasicMaterial({ color: 0xff2a2a }),
@@ -70,13 +74,18 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan', opts = {})
   body.castShadow = true;
   group.add(body);
   // Sloped windshield plane + cabin (beveled look, not a plain box).
-  const shield = new THREE.Mesh(SHARED_GEO.shield, darkMat);
+  // Polish 3 R1 (Sol): the windshield is shared glass 0x7896a6; the cabin
+  // metal (sport + van) reuses this car's own bodyMat — NOT a new red
+  // material — so a garage repaint recolours cabin + spoiler + struts too.
+  // SHARED_MAT.dark is never mutated. The rear deck is the body's own top
+  // face (bodyMat); no extra panel mesh.
+  const shield = new THREE.Mesh(SHARED_GEO.shield, SHARED_MAT.glass);
   shield.position.set(0, bodyY + visH / 2 + 0.28, isSport ? 0.95 : 0.85);
   shield.rotation.x = isSport ? 0.62 : 0.5;
   group.add(shield);
   const cabin = new THREE.Mesh(
     isVan ? SHARED_GEO.cabin.van : SHARED_GEO.cabin.sedan,
-    isVan ? bodyMat : darkMat,
+    (isVan || isSport) ? bodyMat : darkMat,
   );
   cabin.position.set(0, bodyY + visH / 2 + (isVan ? 0.45 : 0.28), isVan ? 0 : isSport ? -0.35 : -0.25);
   if (isSport) cabin.scale.set(1, 0.85, 0.95);
@@ -91,12 +100,13 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan', opts = {})
   group.add(hood);
   if (isSport) {
     // Spoiler on the sport style — wider + deeper wing, on taller struts.
-    const spoiler = new THREE.Mesh(SHARED_GEO.spoiler, darkMat);
+    // Polish 3 R1 (Sol): spoiler + struts reuse bodyMat (repaint follows).
+    const spoiler = new THREE.Mesh(SHARED_GEO.spoiler, bodyMat);
     spoiler.scale.set(1.12, 1, 1.7);
     spoiler.position.set(0, bodyY + 0.72, -len / 2 + 0.25);
     group.add(spoiler);
     for (const s of [-0.7, 0.7]) {
-      const strut = new THREE.Mesh(SHARED_GEO.strut, darkMat);
+      const strut = new THREE.Mesh(SHARED_GEO.strut, bodyMat);
       strut.scale.set(1, 1.25, 1);
       strut.position.set(s, bodyY + 0.55, -len / 2 + 0.25);
       group.add(strut);

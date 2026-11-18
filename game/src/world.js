@@ -267,7 +267,7 @@ export function buildWorld(scene) {
   const SKY_MODES = {
     day: { top: 0x3f7fc9, horizon: 0xffd9a0, fog: 0x9fd0e8, sun: 0xffe8b8, sunI: 2.1, hemiI: 0.95, ball: 0xfff2c0, roadRough: 0.9 },
     sunset: { top: 0x5a4a8a, horizon: 0xff9a5c, fog: 0xd88a6a, sun: 0xffb36a, sunI: 1.6, hemiI: 0.7, ball: 0xffc46a, roadRough: 0.5 },
-    night: { top: 0x0a1230, horizon: 0x1a2a55, fog: 0x0e1830, sun: 0x8aa8ff, sunI: 0.5, hemiI: 0.5, ball: 0xd8e4ff, roadRough: 0.45 },
+    night: { top: 0x0d1738, horizon: 0x24365f, fog: 0x16233f, sun: 0x8aa8ff, sunI: 0.8, hemiI: 0.85, ball: 0xd8e4ff, roadRough: 0.45 },
   };
   world.skyMode = 'day';
   world.setSkyMode = function setSkyMode(mode) {

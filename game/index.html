@@ -78,6 +78,10 @@
   .chip.lock { background: #7a2fd0; border-color: #c96fd0; }
   .chip.block { background: #2f6fd0; border-color: #9fd8e8; }
   #controls-hint { font-size: 12.5px; line-height: 1.7; color: rgba(255,255,255,.85); background: rgba(10,18,26,.55); border-radius: 8px; padding: 8px 12px; }
+  /* v2fix (A): shot mode hides the hint (title screen already lists the
+     controls); .hidden is toggled by hud.js when the left column would
+     otherwise reach the minimap — the whole hint hides, never clips. */
+  body.shot-mode #controls-hint, #controls-hint.hidden { display: none; }
   #gps-dist { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); font-size: 15px; font-weight: 800; color: #ffd24a; background: rgba(10,18,26,.6); border-radius: 8px; padding: 4px 12px; }
   #heli-warning { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); background: rgba(120,10,10,.85); border: 1px solid #ff6a5c; border-radius: 8px; padding: 6px 14px; font-size: 14px; font-weight: 800; color: #fff; opacity: 0; transition: opacity .2s; animation: pulse .7s infinite alternate; }
   #heli-warning.show { opacity: 1; }
@@ -121,6 +125,12 @@
   #title .panel { margin-top: -40px; }
 
   /* --- Shop overlay --- */
+  /* v2fix (B2): lighter backdrop ONLY for #shop so the scene + HUD behind
+     it stay readable; the shop panel itself gets a near-opaque background
+     so its items stay legible. HUD z-index is NOT raised (it must not
+     cover the shop panel). Other overlays keep the dark backdrop. */
+  #shop { background: linear-gradient(160deg, rgba(8,20,32,.55), rgba(20,8,20,.52)); }
+  #shop .panel { background: rgba(10,18,26,.92); border: 1px solid rgba(255,210,74,.45); border-radius: 14px; }
   #shop .panel { max-width: 520px; }
   #shop h1 { font-size: 34px; }
   #shop-rep { font-size: 14px; color: #7be495; margin-top: 6px; font-weight: 600; }

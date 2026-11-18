@@ -60,6 +60,12 @@ export function createHud() {
     mvpdPanel: el('mvpd-panel'),
     mvpdList: el('mvpd-list'),
     mvpdCount: el('mvpd-count'),
+    leftCol: el('left-col'),
+    controlsHint: el('controls-hint'),
+    minimapWrap: el('minimap-wrap'),
+    _hintT: -1, // throttle for the hint-visibility check (v2fix A)
+    _hintHidden: false,
+    _hintH: 0, // cached hint height (offsetHeight is 0 while hidden)
     sightBadge: el('sight-badge'),
     repLabel: el('rep-label'),
     repFill: el('rep-fill'),
@@ -206,6 +212,36 @@ function updateSightBadge(hud, game) {
   }
 }
 
+// v2fix (A): keep the controls hint from ever reaching the minimap.
+// In shot mode the hint is hidden by CSS (body.shot-mode). In normal play
+// the left column grows with the MVPD panel; when its bottom would cross
+// the minimap's top edge, hide the WHOLE hint (no clipped text) and only
+// show it again once there is room for its full height. Throttled to 4 Hz
+// — the MVPD panel only changes at that rate anyway. No overflow:hidden on
+// #left-col: clipping mission/police info would be the same failure mode.
+function updateHintVisibility(hud, game) {
+  if (!hud.controlsHint || !hud.leftCol || !hud.minimapWrap) return;
+  if (game.time - hud._hintT < 0.25) return;
+  hud._hintT = game.time;
+  if (document.body.classList.contains('shot-mode')) {
+    if (!hud._hintHidden) { hud._hintHidden = true; hud.controlsHint.classList.add('hidden'); }
+    return;
+  }
+  const colBottom = hud.leftCol.getBoundingClientRect().bottom;
+  const mmTop = hud.minimapWrap.getBoundingClientRect().top;
+  if (!hud._hintHidden) {
+    hud._hintH = hud.controlsHint.offsetHeight;
+    if (colBottom > mmTop - 8) {
+      hud._hintHidden = true;
+      hud.controlsHint.classList.add('hidden');
+    }
+  } else if (mmTop - colBottom > (hud._hintH || 100) + 8) {
+    // Column (hint currently hidden) leaves room for the full hint again.
+    hud._hintHidden = false;
+    hud.controlsHint.classList.remove('hidden');
+  }
+}
+
 export function updateHud(hud, game) {
   const hp = Math.max(0, Math.round(game.health));
   if (hud._c.hp !== hp) {
@@ -262,6 +298,7 @@ export function updateHud(hud, game) {
   }
   updateMissionPanel(hud, game);
   updateMvpdPanel(hud, game);
+  updateHintVisibility(hud, game);
   updateSightBadge(hud, game);
   if (game.state === 'map') drawMap(hud, game);
   // GPS (DESIGN §9.2): distance + direction arrow to the objective.

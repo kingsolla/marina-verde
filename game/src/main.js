@@ -95,6 +95,13 @@ export async function boot() {
   const shotName = params.get('shot');
   const game = createGame();
   game.shotMode = shotName;
+  // v2fix (A): in screenshot mode the title screen already shows the
+  // controls, so hide the hint panel — with 5 MVPD units it grew into the
+  // minimap and its last line was clipped. Only the 4 known shot names
+  // trigger this; arbitrary ?shot= values leave the HUD untouched.
+  if (['cover', 'chase', 'street', 'hud'].includes(shotName)) {
+    document.body.classList.add('shot-mode');
+  }
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);

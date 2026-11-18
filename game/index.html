@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marina Verde — Open World</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0c141c; font-family: 'Segoe UI', system-ui, sans-serif; }
+  #app, #app canvas { width: 100%; height: 100%; display: block; }
+  #load-error { display: none; position: fixed; top: 12px; left: 12px; z-index: 60; color: #ffb0a0; background: rgba(20,0,0,.8); padding: 10px 14px; border-radius: 8px; font-size: 14px; max-width: 70vw; }
+
+  /* --- HUD --- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  #minimap-wrap { position: absolute; left: 18px; bottom: 18px; width: 168px; height: 168px; border-radius: 50%; overflow: hidden; border: 3px solid rgba(255,255,255,.75); box-shadow: 0 2px 14px rgba(0,0,0,.55); background: #0c141c; }
+  #minimap { width: 168px; height: 168px; display: block; }
+  #status { position: absolute; left: 200px; bottom: 22px; display: flex; flex-direction: column; gap: 6px; }
+  #stars { font-size: 26px; letter-spacing: 3px; color: #ffd24a; }
+  #stars .dim { color: rgba(255,255,255,.35); }
+  #stars.hot { animation: pulse .7s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+  #health-bar { width: 220px; height: 14px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.5); border-radius: 7px; overflow: hidden; }
+  #health-fill { height: 100%; width: 100%; }
+  #health-fill.ok { background: linear-gradient(90deg, #37c978, #7be495); }
+  #health-fill.warn { background: linear-gradient(90deg, #f2a230, #ffd24a); }
+  #health-fill.bad { background: linear-gradient(90deg, #d94040, #ff7a5c); }
+  #health-row { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+  #money { position: absolute; top: 16px; right: 20px; font-size: 30px; font-weight: 800; color: #7be495; }
+  #clock { position: absolute; top: 54px; right: 20px; font-size: 17px; font-weight: 600; color: #ffe9b0; }
+  #speed { position: absolute; right: 20px; bottom: 22px; font-size: 26px; font-weight: 800; text-align: right; }
+  #ammo { position: absolute; right: 20px; bottom: 56px; font-size: 15px; font-weight: 600; color: #ffe9b0; }
+  #objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: 46vw; background: rgba(10,18,26,.72); border: 1px solid rgba(255,210,74,.6); border-radius: 10px; padding: 9px 16px; font-size: 15px; font-weight: 600; text-align: center; }
+  #prompt { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); background: rgba(10,18,26,.8); border-radius: 8px; padding: 8px 14px; font-size: 15px; font-weight: 700; opacity: 0; transition: opacity .15s; }
+  #prompt.show { opacity: 1; }
+  #toast { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); background: rgba(10,18,26,.85); border-radius: 8px; padding: 8px 14px; font-size: 14px; opacity: 0; transition: opacity .2s; }
+  #toast.show { opacity: 1; }
+  #banner { position: absolute; left: 50%; top: 26%; transform: translate(-50%, -50%) scale(.96); text-align: center; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
+  #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #banner-title { font-size: 44px; font-weight: 900; color: #ffd24a; letter-spacing: 1px; }
+  #banner-text { font-size: 18px; margin-top: 6px; color: #fff; }
+  #dialog { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(560px, 80vw); background: rgba(10,18,26,.88); border-left: 4px solid #ffd24a; border-radius: 10px; padding: 12px 16px; opacity: 0; transition: opacity .25s; }
+  #dialog.show { opacity: 1; }
+  #dialog-name { color: #ffd24a; font-weight: 800; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
+  #dialog-text { font-size: 16px; margin-top: 4px; line-height: 1.45; }
+  #controls-hint { position: absolute; left: 18px; top: 16px; font-size: 12.5px; line-height: 1.7; color: rgba(255,255,255,.85); background: rgba(10,18,26,.55); border-radius: 8px; padding: 8px 12px; }
+
+  /* --- Overlays --- */
+  .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: linear-gradient(160deg, rgba(8,20,32,.82), rgba(20,8,20,.78)); color: #fff; text-align: center; }
+  .overlay.show { display: flex; }
+  .panel { max-width: 640px; padding: 32px; }
+  .panel h1 { font-size: 64px; font-weight: 900; letter-spacing: 2px; color: #ffd24a; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+  .panel h2 { font-size: 20px; font-weight: 600; color: #9fd8e8; margin-top: 2px; letter-spacing: 4px; text-transform: uppercase; }
+  .panel p { font-size: 16.5px; line-height: 1.6; margin: 18px 0; color: #eef4f7; }
+  .panel .keys { font-size: 14px; line-height: 2; color: #cfe3ea; margin-bottom: 22px; }
+  .panel .keys b { color: #ffd24a; background: rgba(255,255,255,.1); border-radius: 4px; padding: 1px 7px; }
+  button { pointer-events: auto; cursor: pointer; font: inherit; font-size: 18px; font-weight: 800; color: #14202a; background: #ffd24a; border: none; border-radius: 10px; padding: 13px 34px; margin: 4px; box-shadow: 0 4px 0 #c79a1d; }
+  button:hover { background: #ffe08a; }
+  button.secondary { background: #e8eef2; box-shadow: 0 4px 0 #9aa7b0; }
+  #mute-btn { position: absolute; top: 92px; right: 20px; font-size: 13px; padding: 7px 12px; }
+  #title .panel { margin-top: -40px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="load-error"></div>
+
+<div id="hud">
+  <div id="minimap-wrap"><canvas id="minimap" width="168" height="168"></canvas></div>
+  <div id="status">
+    <div id="stars">★★★★★</div>
+    <div id="health-row"><div id="health-bar"><div id="health-fill" class="ok"></div></div><span id="health-text">100</span></div>
+  </div>
+  <div id="money">$250</div>
+  <div id="clock">16:40</div>
+  <div id="speed"></div>
+  <div id="ammo"></div>
+  <div id="objective"></div>
+  <div id="prompt"></div>
+  <div id="toast"></div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-text"></div></div>
+  <div id="dialog"><div id="dialog-name"></div><div id="dialog-text"></div></div>
+  <div id="controls-hint">WASD move / drive &nbsp;·&nbsp; Mouse look<br>E enter / exit car &nbsp;·&nbsp; Click shoot<br>V punch &nbsp;·&nbsp; Shift run &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mission</div>
+</div>
+
+<div id="title" class="overlay show">
+  <div class="panel">
+    <h1>MARINA VERDE</h1>
+    <h2>An Open-World Story</h2>
+    <p>A sun-soaked coastal city of pastel towers, palm boulevards and one very bad idea.
+    You are <b>Nico Vale</b>, a courier with no money and a fast-car problem.
+    Rosa and Marco have five jobs for you — steal, deliver, outrun the law, and make it to the yacht.</p>
+    <div class="keys">
+      <b>W A S D</b> walk / drive &nbsp; <b>Mouse</b> look &nbsp; <b>E</b> enter / exit car<br>
+      <b>Click</b> shoot &nbsp; <b>V</b> punch &nbsp; <b>Shift</b> run &nbsp; <b>P</b> pause &nbsp; <b>M</b> mission brief
+    </div>
+    <button id="play-btn">Start New Game</button>
+    <button id="continue-btn" class="secondary">Continue</button>
+  </div>
+</div>
+
+<div id="pause" class="overlay">
+  <div class="panel">
+    <h1 style="font-size:44px">PAUSED</h1>
+    <p>Marina Verde waits for no one — except right now.</p>
+    <button id="resume-btn">Resume</button>
+    <button id="restart-btn" class="secondary">Restart (clear save)</button>
+  </div>
+</div>
+
+<button id="mute-btn">Sound: On</button>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

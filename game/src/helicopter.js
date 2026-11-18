@@ -8,7 +8,7 @@ export function helicopterDemand(stars) {
   return stars >= 4 ? 1 : 0;
 }
 
-export function createHelicopter(scene) {
+export function createHelicopter(scene, haloTex = null) {
   const group = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({ color: 0xd8dee2, roughness: 0.45, metalness: 0.3 });
   // Rounded body: cylinder with sphere ends (capsule-ish), not a box.
@@ -16,9 +16,11 @@ export function createHelicopter(scene) {
   body.rotation.x = Math.PI / 2;
   body.castShadow = true;
   group.add(body);
-  // Red stripe along the body so the heli reads against dark buildings.
+  // Red stripe along the body so the heli reads against dark buildings —
+  // v2 polish P3: wider + taller (was 3.1 x 0.5) so it is more than a
+  // hairline at screenshot distance. Body colour stays (design: body tetap).
   const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(3.1, 0.5, 3.6),
+    new THREE.BoxGeometry(3.6, 0.8, 3.6),
     new THREE.MeshLambertMaterial({ color: 0xd94040 }),
   );
   stripe.position.y = -0.2;
@@ -57,7 +59,7 @@ export function createHelicopter(scene) {
   group.add(rotor);
   const blur = new THREE.Mesh(
     new THREE.CircleGeometry(5.6, 24),
-    new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
   );
   blur.rotation.x = -Math.PI / 2;
   blur.position.y = 1.72;
@@ -76,11 +78,22 @@ export function createHelicopter(scene) {
   );
   group.add(cone);
   const navLight = new THREE.Mesh(
-    new THREE.SphereGeometry(0.28, 10, 10),
+    new THREE.SphereGeometry(0.4, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0xff2222 }),
   );
   navLight.position.set(0, -1.6, -1);
   group.add(navLight);
+  if (haloTex) {
+    // P6 halo on the nav light (red glow, rides with the heli).
+    const haloMat = new THREE.SpriteMaterial({
+      map: haloTex, color: 0xff4444, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const halo = new THREE.Sprite(haloMat);
+    halo.scale.set(2.4, 2.4, 1);
+    halo.position.set(0, -1.6, -1);
+    group.add(halo);
+  }
   group.visible = false;
   scene.add(group);
   return {

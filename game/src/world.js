@@ -23,6 +23,46 @@ function canvasTexture(c, repeatX = 1, repeatY = 1) {
   return t;
 }
 
+// v2 polish P6 — fake glow (no bloom module exists): ONE shared radial halo
+// texture; sprites are additive, depthTest on (never shine through walls),
+// depthWrite off, small on screen (low overdraw). Exported for shops.js
+// (sign halos) and helicopter.js (nav-light halo).
+export function makeHaloTexture() {
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+const _haloMats = new Map(); // `${color}|${opacity}` -> shared SpriteMaterial
+export function makeHaloSprite(tex, color, opacity, scale) {
+  const key = `${color}|${opacity}`;
+  let mat = _haloMats.get(key);
+  if (!mat) {
+    mat = new THREE.SpriteMaterial({
+      map: tex,
+      color,
+      transparent: true,
+      opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    _haloMats.set(key, mat);
+  }
+  const s = new THREE.Sprite(mat);
+  s.scale.set(scale, scale, 1);
+  return s;
+}
+
 // Facade variant: per-floor window variation, balconies, shutters, AC units.
 // Returns {map, emissive} — the emissive canvas holds only the lit windows.
 function facadeTextures(rand) {
@@ -69,16 +109,21 @@ function facadeTextures(rand) {
   return { map: canvasTexture(c), emissive: canvasTexture(e) };
 }
 
-function asphaltTexture(rand) {
+// v2 polish P2: lighter base (#484e57, was #3a3f46) + same speckle count
+// (Sol cut the count increase; contrast is widened on the SAME draws so the
+// world RNG stream is untouched) + lane markings BAKED in (Sol: no separate
+// planes — no extra calls, no z-fighting). `axis` picks the marking
+// orientation: X roads run along canvas-U, Z roads along canvas-V.
+function asphaltTexture(rand, axis = 'x') {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 256;
   const g = c.getContext('2d');
-  g.fillStyle = '#3a3f46';
+  g.fillStyle = '#484e57';
   g.fillRect(0, 0, 256, 256);
-  // Speckle noise.
+  // Speckle noise (same 2600 draws as v2 — only the value range widens).
   for (let i = 0; i < 2600; i += 1) {
-    const v = 40 + Math.floor(rand() * 50);
+    const v = 30 + Math.floor(rand() * 85);
     g.fillStyle = `rgb(${v},${v + 3},${v + 8})`;
     g.fillRect(rand() * 256, rand() * 256, 1.6, 1.6);
   }
@@ -101,10 +146,26 @@ function asphaltTexture(rand) {
     g.fillStyle = 'rgba(28,30,34,0.5)';
     g.fillRect(rand() * 200, rand() * 200, 30 + rand() * 40, 18 + rand() * 30);
   }
-  // Worn lane markings: two faint dashes baked in.
-  g.fillStyle = 'rgba(245,233,168,0.55)';
-  g.fillRect(20, 124, 40, 4);
-  g.fillRect(180, 124, 40, 4);
+  // Baked markings: double yellow centre line (continuous) + white edge
+  // lines. Horizontal in canvas = along-road for X roads; vertical = along
+  // road for Z roads (their texture repeat runs the other way).
+  const line = (x, y, w, h) => g.fillRect(x, y, w, h);
+  g.fillStyle = 'rgba(245,200,60,0.85)';
+  if (axis === 'x') {
+    line(0, 118, 256, 4);
+    line(0, 134, 256, 4);
+  } else {
+    line(118, 0, 4, 256);
+    line(134, 0, 4, 256);
+  }
+  g.fillStyle = 'rgba(235,235,235,0.8)';
+  if (axis === 'x') {
+    line(0, 6, 256, 4);
+    line(0, 246, 256, 4);
+  } else {
+    line(6, 0, 4, 256);
+    line(246, 0, 4, 256);
+  }
   return canvasTexture(c, 16, 1);
 }
 
@@ -120,8 +181,8 @@ function sidewalkTexture(rand) {
     g.fillStyle = `rgb(${v},${v - 12},${v - 40})`;
     g.fillRect(rand() * 128, rand() * 128, 1.5, 1.5);
   }
-  g.strokeStyle = 'rgba(120,105,80,0.8)';
-  g.lineWidth = 2;
+  g.strokeStyle = 'rgba(110,95,70,1.0)';
+  g.lineWidth = 3;
   for (let i = 0; i <= 4; i += 1) {
     g.beginPath(); g.moveTo(i * 32, 0); g.lineTo(i * 32, 128); g.stroke();
     g.beginPath(); g.moveTo(0, i * 32); g.lineTo(128, i * 32); g.stroke();
@@ -137,19 +198,19 @@ function sandTexture(rand) {
   g.fillStyle = '#f2d8a7';
   g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 3200; i += 1) {
-    const v = 200 + Math.floor(rand() * 55);
+    const v = 185 + Math.floor(rand() * 70);
     g.fillStyle = `rgb(${v},${Math.floor(v * 0.82)},${Math.floor(v * 0.55)})`;
     g.fillRect(rand() * 256, rand() * 256, 1.6, 1.6);
   }
   // Subtle ripple bands.
-  g.strokeStyle = 'rgba(210,175,110,0.5)';
+  g.strokeStyle = 'rgba(210,175,110,0.6)';
   g.lineWidth = 2;
   for (let y = 0; y < 256; y += 18) {
     g.beginPath();
     for (let x = 0; x <= 256; x += 16) g.lineTo(x, y + Math.sin(x * 0.05 + y) * 3);
     g.stroke();
   }
-  return canvasTexture(c, 6, 2);
+  return canvasTexture(c, 10, 3);
 }
 
 function waterTexture(rand) {
@@ -191,22 +252,33 @@ function roofTexture(rand, base = 0xb5654a) {
   return canvasTexture(c, 3, 3);
 }
 
+// v2 polish P1: 8 fronds (was 5), longer (3.4, was 2.6) and wider (0.7,
+// was 0.55) for a broad crown; tilt 1.65 rad so the frond tips droop just
+// below horizontal instead of pointing up like spears (Sol: check the cone's
+// local orientation first — the cone apex is +Y, so tilt > PI/2 tips it
+// outward-DOWN). Trunk slightly slimmer at the tip (0.12/0.22).
+// Coconut cluster + trunk rings: CUT per Sol review (invisible at 720p).
+// No new rand() draws here, so the world RNG stream is untouched.
 function makePalm(rand) {
   const group = new THREE.Group();
   const h = range(rand, 5, 8);
   const trunk = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.14, 0.24, h, 16),
+    new THREE.CylinderGeometry(0.12, 0.22, h, 12),
     new THREE.MeshLambertMaterial({ color: PALETTE.palmTrunk }),
   );
   trunk.position.y = h / 2;
   trunk.rotation.z = range(rand, -0.08, 0.08);
+  trunk.userData.batchKey = 'palmTrunk';
+  trunk.userData.unitH = h; // batch uses a unit-height cylinder, scaled by h
   group.add(trunk);
   const leafMat = new THREE.MeshLambertMaterial({ color: PALETTE.palmLeaf });
-  for (let i = 0; i < 5; i += 1) {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.6, 4), leafMat);
-    const a = (i / 5) * Math.PI * 2;
-    leaf.position.set(Math.cos(a) * 0.9, h + 0.15, Math.sin(a) * 0.9);
-    leaf.rotation.set(Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1);
+  const leafGeo = new THREE.ConeGeometry(0.7, 3.4, 4);
+  for (let i = 0; i < 8; i += 1) {
+    const leaf = new THREE.Mesh(leafGeo, leafMat);
+    const a = (i / 8) * Math.PI * 2;
+    leaf.position.set(Math.cos(a) * 1.0, h + 0.15, Math.sin(a) * 1.0);
+    leaf.rotation.set(Math.sin(a) * 1.65, 0, -Math.cos(a) * 1.65);
+    leaf.userData.batchKey = 'palmLeaf';
     group.add(leaf);
   }
   return group;
@@ -216,6 +288,9 @@ export function buildWorld(scene) {
   const rand = mulberry32(CITY.SEED);
   const colliders = []; // {minX, maxX, minZ, maxZ}
   const world = { colliders, places: PLACES, palms: [], waterTextures: [] };
+  // P6: one shared halo texture for all fake-glow sprites (lamps, billboard,
+  // heli nav light, shop signs). Created once, before any user of it.
+  world.haloTex = makeHaloTexture();
 
   // --- Gradient sky sphere (shader) + sun, fog -----------------------------
   // A large inverted sphere: golden horizon fading to blue zenith. No flat
@@ -250,6 +325,10 @@ export function buildWorld(scene) {
   sun.shadow.camera.far = 600;
   scene.add(sun);
   world.sun = sun;
+  // P3 (revised after perf measurement — see note in setSkyMode): NO extra
+  // directional fill. A third light raised SwiftShader frame times ~25%
+  // (every lit fragment pays for every light), so the lift comes from the
+  // hemisphere light instead — same visual goal, zero new lights.
 
   // Sun disc + a few clouds (cheap billboards of spheres).
   const sunBall = new THREE.Mesh(
@@ -264,10 +343,16 @@ export function buildWorld(scene) {
   // gradient shader uniforms + fog + lights switch together; the road
   // roughness drops at sunset/night for a slight wet sheen (no real
   // reflections — that is stated honestly in the report).
+  // P3 lift WITHOUT a third light: the hemisphere intensity is raised per
+  // mode (day 0.95->1.15, sunset 0.7->0.9, night 0.85->1.0) so shadowed
+  // faces and the road stop going black. A shadowless directional fill was
+  // tried first and REMOVED: perf-mjs showed frame median 2483->3117 ms
+  // and p95 3317->5100 ms with it (SwiftShader pays per light per fragment).
+  // The sky top/horizon/fog/sun values below are UNTOUCHED (playtest pins them).
   const SKY_MODES = {
-    day: { top: 0x3f7fc9, horizon: 0xffd9a0, fog: 0x9fd0e8, sun: 0xffe8b8, sunI: 2.1, hemiI: 0.95, ball: 0xfff2c0, roadRough: 0.9 },
-    sunset: { top: 0x5a4a8a, horizon: 0xff9a5c, fog: 0xd88a6a, sun: 0xffb36a, sunI: 1.6, hemiI: 0.7, ball: 0xffc46a, roadRough: 0.5 },
-    night: { top: 0x0d1738, horizon: 0x24365f, fog: 0x16233f, sun: 0x8aa8ff, sunI: 0.8, hemiI: 0.85, ball: 0xd8e4ff, roadRough: 0.45 },
+    day: { top: 0x3f7fc9, horizon: 0xffd9a0, fog: 0x9fd0e8, sun: 0xffe8b8, sunI: 2.1, hemiI: 1.15, ball: 0xfff2c0, roadRough: 0.9, glint: 0.15 },
+    sunset: { top: 0x5a4a8a, horizon: 0xff9a5c, fog: 0xd88a6a, sun: 0xffb36a, sunI: 1.6, hemiI: 0.9, ball: 0xffc46a, roadRough: 0.5, glint: 0.3 },
+    night: { top: 0x0d1738, horizon: 0x24365f, fog: 0x16233f, sun: 0x8aa8ff, sunI: 0.8, hemiI: 1.0, ball: 0xd8e4ff, roadRough: 0.45, glint: 0.06 },
   };
   world.skyMode = 'day';
   world.setSkyMode = function setSkyMode(mode) {
@@ -281,15 +366,19 @@ export function buildWorld(scene) {
     sun.intensity = m.sunI;
     hemi.intensity = m.hemiI;
     sunBall.material.color.setHex(m.ball);
+    if (world.glintMat) world.glintMat.opacity = m.glint;
     for (const rm of world.roadMats ?? []) rm.roughness = m.roadRough;
   };
   const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
   for (let i = 0; i < 10; i += 1) {
     const cloud = new THREE.Group();
     for (let j = 0; j < 4; j += 1) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(range(rand, 6, 12), 8, 8), cloudMat);
+      const pr = range(rand, 6, 12);
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(pr, 7, 6), cloudMat);
       puff.position.set(j * 9 - 14, range(rand, -2, 2), range(rand, -4, 4));
       puff.scale.y = 0.55;
+      puff.userData.batchKey = 'cloud';
+      puff.userData.unitR = pr; // batch uses a unit sphere, scaled by radius
       cloud.add(puff);
     }
     cloud.position.set(range(rand, -380, 380), range(rand, 120, 170), range(rand, -380, 120));
@@ -343,9 +432,51 @@ export function buildWorld(scene) {
   seaDeep.position.set(0, -0.6, SEA_Z + 480);
   scene.add(seaDeep);
 
+  // v2 polish P2 — sun glint on the sea (Sol: a soft mask stretched along
+  // the sun path, opacity per sky mode, depthWrite off, lifted clear of the
+  // water to avoid z-fighting) + a darker wet-sand strip at the waterline.
+  {
+    const gc = document.createElement('canvas');
+    gc.width = 64;
+    gc.height = 256;
+    const gg = gc.getContext('2d');
+    const lg = gg.createLinearGradient(0, 0, 0, 256);
+    lg.addColorStop(0, 'rgba(255,200,140,0)');
+    lg.addColorStop(0.7, 'rgba(255,200,140,0.35)');
+    lg.addColorStop(1, 'rgba(255,220,160,0.9)');
+    gg.fillStyle = lg;
+    gg.fillRect(0, 0, 64, 256);
+    gg.globalCompositeOperation = 'destination-in';
+    const sg = gg.createLinearGradient(0, 0, 64, 0);
+    sg.addColorStop(0, 'rgba(0,0,0,0)');
+    sg.addColorStop(0.5, 'rgba(0,0,0,1)');
+    sg.addColorStop(1, 'rgba(0,0,0,0)');
+    gg.fillStyle = sg;
+    gg.fillRect(0, 0, 64, 256);
+    const glintTex = new THREE.CanvasTexture(gc);
+    glintTex.colorSpace = THREE.SRGBColorSpace;
+    const glintMat = new THREE.MeshBasicMaterial({
+      map: glintTex, transparent: true, opacity: 0.15,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const glint = new THREE.Mesh(new THREE.PlaneGeometry(36, 180), glintMat);
+    glint.rotation.x = -Math.PI / 2;
+    glint.position.set(36, -0.32, 330); // bright end toward the horizon (south)
+    scene.add(glint);
+    world.glintMat = glintMat;
+    const wet = new THREE.Mesh(
+      new THREE.PlaneGeometry(560, 6),
+      new THREE.MeshLambertMaterial({ color: 0xa8875a, transparent: true, opacity: 0.8 }),
+    );
+    wet.rotation.x = -Math.PI / 2;
+    wet.position.set(0, 0.05, 232);
+    wet.receiveShadow = true;
+    scene.add(wet);
+  }
+
   // --- Roads ---------------------------------------------------------------
-  const asphaltX = asphaltTexture(rand);
-  const asphaltZ = asphaltTexture(rand);
+  const asphaltX = asphaltTexture(rand, 'x');
+  const asphaltZ = asphaltTexture(rand, 'z');
   asphaltZ.repeat.set(1, 16);
   // Standard material (not Lambert) so the sky modes can lower the roughness
   // for a wet-road sheen at sunset/night (DESIGN §10.7).
@@ -372,6 +503,32 @@ export function buildWorld(scene) {
   front.receiveShadow = true;
   scene.add(front);
   ROAD_LINES.push({ axis: 'x', at: 182 });
+
+  // Zebra crossings at the two beachfront intersections (P2): one mesh each
+  // with a striped canvas texture. A crossing must sit at ONE place, so it
+  // cannot be baked into the repeating asphalt texture (Sol's bake rule is
+  // for lane markings, which do repeat).
+  {
+    const zc = document.createElement('canvas');
+    zc.width = 128;
+    zc.height = 256;
+    const zg = zc.getContext('2d');
+    zg.clearRect(0, 0, 128, 256);
+    zg.fillStyle = 'rgba(240,240,235,0.92)';
+    for (let y = 8; y < 256; y += 42) zg.fillRect(0, y, 128, 18);
+    const zebraTex = new THREE.CanvasTexture(zc);
+    zebraTex.colorSpace = THREE.SRGBColorSpace;
+    for (const zx of [-52, 52]) {
+      const zebra = new THREE.Mesh(
+        new THREE.PlaneGeometry(7, 12),
+        new THREE.MeshLambertMaterial({ map: zebraTex, transparent: true, opacity: 0.9 }),
+      );
+      zebra.rotation.x = -Math.PI / 2;
+      zebra.position.set(zx, 0.05, 182);
+      zebra.receiveShadow = true;
+      scene.add(zebra);
+    }
+  }
 
   // --- Buildings -----------------------------------------------------------
   // Three facade variants (window layout + lit windows differ per variant).
@@ -417,12 +574,14 @@ export function buildWorld(scene) {
     roof.scale.set(w + 0.6, 0.8, d + 0.6);
     roof.position.set(x, h + 0.4, z);
     roof.castShadow = true;
+    roof.userData.batchKey = 'roof';
     scene.add(roof);
     // Rooftop AC box + sometimes a water tank, for silhouette variety.
     // (The parapet lip was cut for the draw-call budget, DESIGN §8.)
     const ac = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x9aa4ad }));
     ac.scale.set(Math.min(4, w * 0.3), 1.2, Math.min(4, d * 0.3));
     ac.position.set(x + w * 0.2, h + 1.2, z - d * 0.15);
+    ac.userData.batchKey = 'acBox';
     scene.add(ac);
     if (chance(rand, 0.4)) {
       const tank = new THREE.Mesh(
@@ -431,12 +590,14 @@ export function buildWorld(scene) {
       );
       tank.position.set(x - w * 0.25, h + 1.9, z + d * 0.2);
       tank.castShadow = true;
+      tank.userData.batchKey = 'tank';
       scene.add(tank);
       const tankTop = new THREE.Mesh(
         new THREE.ConeGeometry(1.5, 0.9, 16),
         new THREE.MeshLambertMaterial({ color: 0x5a7a9a }),
       );
       tankTop.position.set(x - w * 0.25, h + 3.5, z + d * 0.2);
+      tankTop.userData.batchKey = 'tankTop';
       scene.add(tankTop);
     }
     colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
@@ -606,6 +767,10 @@ export function buildWorld(scene) {
     );
     board.position.set(60, 7.5, 176);
     scene.add(board);
+    // P6 halo on the billboard's road-facing side (pink neon glow).
+    const boardHalo = makeHaloSprite(world.haloTex, 0xff5fa2, 0.3, 11);
+    boardHalo.position.set(60, 7.5, 176.6);
+    scene.add(boardHalo);
     const postMat = new THREE.MeshLambertMaterial({ color: 0x3a3f46 });
     for (const px of [52, 68]) {
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 7.5, 8), postMat);
@@ -625,12 +790,15 @@ export function buildWorld(scene) {
       new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }),
     );
     pole.position.set(ux, 1.3, uz);
+    pole.userData.batchKey = 'umbPole';
     scene.add(pole);
     const top = new THREE.Mesh(
       new THREE.ConeGeometry(2.2, 1, 8),
       new THREE.MeshLambertMaterial({ color: umbCols[i % 4] }),
     );
     top.position.set(ux, 2.9, uz);
+    top.userData.batchKey = 'umbTop';
+    top.userData.instColor = umbCols[i % 4]; // batch uses a white base + setColorAt
     scene.add(top);
   }
 
@@ -759,10 +927,20 @@ export function buildWorld(scene) {
     for (let x = -156; x <= 156; x += 104) { // every other block (draw-call budget)
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 6, 16), lampMat);
       pole.position.set(x, 3, line.at + 7);
+      pole.userData.batchKey = 'lampPole';
       scene.add(pole);
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), lampGlowMat);
-      lamp.position.set(x, 6.2, line.at + 7);
-      scene.add(lamp);
+      if (line.at === 182) {
+        // Beachfront hero lamps (P6): halo sprite INSTEAD of the solid glow
+        // ball — Sol: don't draw both without a visual reason.
+        const halo = makeHaloSprite(world.haloTex, 0xffe9a0, 0.32, 3.2);
+        halo.position.set(x, 6.2, line.at + 7);
+        scene.add(halo);
+      } else {
+        const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), lampGlowMat);
+        lamp.position.set(x, 6.2, line.at + 7);
+        lamp.userData.batchKey = 'lampGlow';
+        scene.add(lamp);
+      }
     }
   }
 
@@ -773,7 +951,95 @@ export function buildWorld(scene) {
       new THREE.MeshLambertMaterial({ color: 0xe86a5a }),
     );
     buoy.position.set(-140 + i * 55, 0.3, SEA_Z + 40 + (i % 2) * 25);
+    buoy.userData.batchKey = 'buoy';
     scene.add(buoy);
+  }
+
+  // --- P7 instancing (Sol corrections, applied as a final pass) ------------
+  // Meshes flagged with userData.batchKey are collected by WORLD matrix and
+  // replaced with InstancedMesh batches. Rules enforced here:
+  // - matrices are WORLD matrices (updateMatrixWorld, then copy matrixWorld;
+  //   the batch itself sits at the scene root with an identity transform, so
+  //   inverse(batch.matrixWorld) x oldMesh.matrixWorld == oldMesh.matrixWorld).
+  // - NO negative scale / shear anywhere (every source transform is plain
+  //   translate / rotate / axis scale).
+  // - one batch per (geometry + material + shadow settings + QUADRANT zone),
+  //   never one city-wide batch: a single bounding sphere would keep the
+  //   whole city in the vertex pipeline. Zones are city quadrants (x>=0 /
+  //   z>=0) — small enough to cull, big enough to still save calls.
+  // - count == number of live instances; every slot is filled; needsUpdate
+  //   set; computeBoundingSphere() called after the matrices are in.
+  // - setColorAt is only an RGB multiplier: the umbrella-top batch uses a
+  //   WHITE base material and stores the final colour per instance.
+  // - the world RNG stream is untouched (this pass draws nothing from rand).
+  // - building BOXES are deliberately NOT batched: each carries a cloned
+  //   facade texture with a per-building repeat (window size), and batching
+  //   would stretch the windows. Roofs/AC/tanks share materials, so they batch.
+  {
+    const zoneOf = (x, z) => (x >= 0 ? 'E' : 'W') + (z >= 0 ? 'S' : 'N');
+    const matSig = (o) => {
+      if (o.userData.batchKey === 'umbTop') return 'white';
+      const m = o.material;
+      const col = m.color ? m.color.getHexString() : 'nocol';
+      return `${m.type}|${col}|${m.map ? m.map.uuid : ''}|${m.emissiveMap ? m.emissiveMap.uuid : ''}`;
+    };
+    const groups = new Map();
+    const doomed = [];
+    scene.traverse((o) => {
+      if (!o.isMesh || !o.userData.batchKey) return;
+      o.updateWorldMatrix(true, false);
+      const wp = o.getWorldPosition(new THREE.Vector3());
+      const key = `${o.userData.batchKey}|${zoneOf(wp.x, wp.z)}|${matSig(o)}`;
+      let g = groups.get(key);
+      if (!g) {
+        g = {
+          batchKey: o.userData.batchKey, geo: o.geometry, mat: o.material,
+          cast: o.castShadow, recv: o.receiveShadow, items: [],
+        };
+        groups.set(key, g);
+      }
+      g.items.push({
+        matrix: o.matrixWorld.clone(),
+        instColor: o.userData.instColor,
+        unitR: o.userData.unitR,
+        unitH: o.userData.unitH,
+      });
+      doomed.push(o);
+    });
+    for (const o of doomed) o.parent.remove(o);
+    // Unit geometries for the two cases whose source geometries differ per
+    // instance: cloud puffs (radius varies) and palm trunks (height varies).
+    const unitGeo = (batchKey) => {
+      if (batchKey === 'cloud') return new THREE.SphereGeometry(1, 7, 6);
+      if (batchKey === 'palmTrunk') return new THREE.CylinderGeometry(0.12, 0.22, 1, 12);
+      return null;
+    };
+    const m4 = new THREE.Matrix4();
+    const s4 = new THREE.Matrix4();
+    world.batchStats = {};
+    for (const g of groups.values()) {
+      const geo = unitGeo(g.batchKey) ?? g.geo;
+      let mat = g.mat;
+      if (g.batchKey === 'umbTop') mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const im = new THREE.InstancedMesh(geo, mat, g.items.length);
+      g.items.forEach((it, i) => {
+        m4.copy(it.matrix);
+        if (it.unitR !== undefined) m4.multiply(s4.makeScale(it.unitR, it.unitR, it.unitR));
+        if (it.unitH !== undefined) m4.multiply(s4.makeScale(1, it.unitH, 1));
+        im.setMatrixAt(i, m4);
+        if (it.instColor !== undefined) im.setColorAt(i, new THREE.Color(it.instColor));
+      });
+      im.count = g.items.length;
+      im.instanceMatrix.needsUpdate = true;
+      if (im.instanceColor) im.instanceColor.needsUpdate = true;
+      im.computeBoundingSphere();
+      im.castShadow = g.cast;
+      im.receiveShadow = g.recv;
+      scene.add(im);
+      world.batchStats[g.batchKey] = (world.batchStats[g.batchKey] ?? 0) + 1;
+    }
+    world.batchMeshes = doomed.length;
+    world.batchCalls = groups.size;
   }
 
   return world;

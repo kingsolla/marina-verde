@@ -5,6 +5,7 @@
 // while it is open.
 import * as THREE from 'three';
 import { SHOPS, PLACES, PALETTE } from './config.js';
+import { makeHaloSprite } from './world.js';
 
 function signTexture(text, bgColor) {
   const c = document.createElement('canvas');
@@ -65,6 +66,13 @@ export function createShops(scene, world) {
     );
     sign.position.set(0, 4.6, 3.56);
     group.add(sign);
+    // P6 halo on the sign (shared halo texture, shop colour) — the neon
+    // signs read at night without a bloom pass.
+    if (world.haloTex) {
+      const halo = makeHaloSprite(world.haloTex, def.color, 0.3, 5);
+      halo.position.set(0, 4.6, 4.1);
+      group.add(halo);
+    }
     // Glowing door marker ring on the ground in front of the shop.
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(1.6, 2.3, 24),

@@ -79,7 +79,10 @@ export function createGame() {
 }
 
 function buildPlayerMesh() {
-  const mesh = makePersonMesh(0x2f8f8a, 0x2a2f38, 0xf2c9a0);
+  // v2 polish P5 — Nico hero treatment (player only, ~0 cost): darker teal
+  // jacket (0x1f6f6a, distinct from every ped shirt), dark hair under the
+  // cap, and shoes so the figure grounds at screenshot distance.
+  const mesh = makePersonMesh(0x1f6f6a, 0x2a2f38, 0xf2c9a0);
   // Nico Vale: teal jacket, dark jeans, a cap.
   const cap = new THREE.Mesh(
     new THREE.BoxGeometry(0.4, 0.12, 0.38),
@@ -87,6 +90,19 @@ function buildPlayerMesh() {
   );
   cap.position.y = 1.92;
   mesh.add(cap);
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: 0x241a12 }),
+  );
+  hair.position.y = 1.74;
+  mesh.add(hair);
+  const shoeMat = new THREE.MeshLambertMaterial({ color: 0x1c1c1c });
+  const shoeGeo = new THREE.BoxGeometry(0.24, 0.12, 0.34);
+  for (const leg of [mesh.userData.legL, mesh.userData.legR]) {
+    const shoe = new THREE.Mesh(shoeGeo, shoeMat);
+    shoe.position.set(0, -0.42, 0.05);
+    leg.add(shoe);
+  }
   return mesh;
 }
 
@@ -126,7 +142,7 @@ export async function boot() {
   const input = createInput();
   const hud = createHud();
   const beacon = createBeacon(scene);
-  const heli = createHelicopter(scene);
+  const heli = createHelicopter(scene, world.haloTex);
   game.heli = heli;
   const radio = createRadio(audio);
   game.radio = radio;

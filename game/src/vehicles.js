@@ -8,28 +8,62 @@ import { CAR, PALETTE, ROAD_LINES } from './config.js';
 import { mulberry32, pick, range } from './rng.js';
 import { collideCircle } from './world.js';
 
+// Shared geometries + trim materials (P7 cleanup): every car reuses the
+// same boxes/cylinders instead of allocating its own per car — fewer unique
+// geometries in the scene, zero visual change (rotation/scale live on the
+// meshes, never on the geometry). The BODY material stays per-car: repaint,
+// the garage and the follow-target grey sedan all mutate bodyMat.color.
+const SHARED_GEO = {
+  body: {
+    sedan: new THREE.BoxGeometry(2, 0.7, 4.4),
+    sport: new THREE.BoxGeometry(2, 0.55, 5.0),
+    van: new THREE.BoxGeometry(2, 1.15, 4.8),
+  },
+  shield: new THREE.BoxGeometry(1.7, 0.08, 1.1),
+  cabin: {
+    sedan: new THREE.BoxGeometry(1.7, 0.62, 2.2),
+    van: new THREE.BoxGeometry(1.7, 0.9, 2.6),
+  },
+  hood: new THREE.BoxGeometry(1.9, 0.16, 0.9),
+  spoiler: new THREE.BoxGeometry(1.8, 0.08, 0.4),
+  strut: new THREE.BoxGeometry(0.1, 0.35, 0.1),
+  wheel: new THREE.CylinderGeometry(0.36, 0.36, 0.3, 16),
+  lightBar: new THREE.BoxGeometry(1.5, 0.18, 0.1),
+};
+const SHARED_MAT = {
+  dark: new THREE.MeshLambertMaterial({ color: 0x1c2733 }),
+  wheel: new THREE.MeshLambertMaterial({ color: 0x141414 }),
+  head: new THREE.MeshBasicMaterial({ color: 0xfff6c0 }),
+  tail: new THREE.MeshBasicMaterial({ color: 0xff2a2a }),
+};
+
 export function makeCarMesh(color, isPolice = false, style = 'sedan') {
   const group = new THREE.Group();
   const isSport = style === 'sport';
   const isVan = style === 'van';
-  const bodyMat = isSport
-    ? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.25 })
-    : new THREE.MeshLambertMaterial({ color });
-  const darkMat = new THREE.MeshLambertMaterial({ color: 0x1c2733 });
+  // v2 polish P4 (Sol correction): ALL styles MeshStandardMaterial, but
+  // metalness LOW — without an env map, metalness 0.35 darkens the paint
+  // (diffuse is taken away and nothing reflects back). Start 0-0.1 with
+  // roughness 0.35-0.45; the hero coupe is verified in the cover capture.
+  // Glass / tyres / trim stay OUT of the paint material (darkMat, as before).
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color, roughness: 0.4, metalness: isSport ? 0.1 : 0.05,
+  });
+  const darkMat = SHARED_MAT.dark;
   const len = isSport ? 5.0 : isVan ? 4.8 : 4.4;
   const bodyH = isVan ? 1.15 : isSport ? 0.55 : 0.7;
   const bodyY = isVan ? 0.85 : isSport ? 0.48 : 0.55;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2, bodyH, len), bodyMat);
+  const body = new THREE.Mesh(SHARED_GEO.body[style] ?? SHARED_GEO.body.sedan, bodyMat);
   body.position.y = bodyY;
   body.castShadow = true;
   group.add(body);
   // Sloped windshield plane + cabin (beveled look, not a plain box).
-  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 1.1), darkMat);
+  const shield = new THREE.Mesh(SHARED_GEO.shield, darkMat);
   shield.position.set(0, bodyY + bodyH / 2 + 0.28, 0.85);
   shield.rotation.x = 0.5;
   group.add(shield);
   const cabin = new THREE.Mesh(
-    new THREE.BoxGeometry(1.7, isVan ? 0.9 : 0.62, isVan ? 2.6 : 2.2),
+    isVan ? SHARED_GEO.cabin.van : SHARED_GEO.cabin.sedan,
     isVan ? bodyMat : darkMat,
   );
   cabin.position.set(0, bodyY + bodyH / 2 + (isVan ? 0.45 : 0.28), isVan ? 0 : -0.25);
@@ -38,25 +72,23 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan') {
   // Fender half-cylinders were cut for draw-call budget (DESIGN §8): the
   // body + sloped windshield + spoiler already give the car its shape.
   // Hood + trunk hints.
-  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 0.9), bodyMat);
+  const hood = new THREE.Mesh(SHARED_GEO.hood, bodyMat);
   hood.position.set(0, bodyY + bodyH / 2 + 0.02, len / 2 - 0.45);
   group.add(hood);
   if (isSport) {
     // Spoiler on the sport style.
-    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.4), darkMat);
+    const spoiler = new THREE.Mesh(SHARED_GEO.spoiler, darkMat);
     spoiler.position.set(0, bodyY + 0.75, -len / 2 + 0.25);
     group.add(spoiler);
     for (const s of [-0.7, 0.7]) {
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.1), darkMat);
+      const strut = new THREE.Mesh(SHARED_GEO.strut, darkMat);
       strut.position.set(s, bodyY + 0.55, -len / 2 + 0.25);
       group.add(strut);
     }
   }
-  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 16);
-  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141414 });
   const wheels = [];
   for (const [wx, wz] of [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]]) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+    const wheel = new THREE.Mesh(SHARED_GEO.wheel, SHARED_MAT.wheel);
     wheel.rotation.z = Math.PI / 2;
     wheel.position.set(wx, 0.36, wz);
     wheel.castShadow = true;
@@ -64,26 +96,32 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan') {
     wheels.push(wheel);
   }
   // Headlight + taillight bars (one mesh each — draw-call budget, DESIGN §8).
-  const headMat = new THREE.MeshBasicMaterial({ color: 0xfff6c0 });
-  const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
-  const headBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.1), headMat);
+  const headBar = new THREE.Mesh(SHARED_GEO.lightBar, SHARED_MAT.head);
   headBar.position.set(0, bodyY, len / 2 + 0.02);
   group.add(headBar);
-  const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.1), tailMat);
+  const tailBar = new THREE.Mesh(SHARED_GEO.lightBar, SHARED_MAT.tail);
   tailBar.position.set(0, bodyY, -len / 2 - 0.02);
   group.add(tailBar);
   let lightBar = null;
   if (isPolice) {
     // White body with black doors is handled by the caller's colour; the light
     // bar is the giveaway, plus a roof number plate.
+    // v2 polish: the bar sits HIGH (centre +0.78 over the body top, boxes
+    // 0.4 tall) so it clears the cabin roofline (1.49) — at +0.55 it was
+    // embedded in the cabin and invisible from behind/side. It must read
+    // as red/blue at night from 20 m.
+    // The two boxes run ALONG the car's length (not across its width):
+    // from a side view only one width-wise box faces the camera, and half
+    // the time it is the dim flash phase; length-wise both boxes stay
+    // visible, so one bright + one dim always reads as a light bar.
     lightBar = new THREE.Group();
-    const red = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.5), new THREE.MeshBasicMaterial({ color: 0xff2222 }));
-    red.position.x = -0.35;
-    const blue = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.5), new THREE.MeshBasicMaterial({ color: 0x2266ff }));
-    blue.position.x = 0.35;
+    const red = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.35), new THREE.MeshBasicMaterial({ color: 0xff2222 }));
+    red.position.z = -0.3;
+    const blue = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 0.35), new THREE.MeshBasicMaterial({ color: 0x2266ff }));
+    blue.position.z = 0.3;
     lightBar.add(red);
     lightBar.add(blue);
-    lightBar.position.set(0, bodyY + bodyH / 2 + 0.55, -0.25);
+    lightBar.position.set(0, bodyY + bodyH / 2 + 0.78, -0.25);
     lightBar.userData = { red, blue };
     group.add(lightBar);
   }

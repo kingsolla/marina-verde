@@ -1,6 +1,9 @@
 // Marina Verde — sound. Everything is synthesised with WebAudio: no audio
 // files, no network. Engine hum, police siren, pickup chime, gunshot, punch
 // thud, UI blips, and a laid-back bass-and-hats loop for the city.
+// v2: the music loop moved to radio.js (3 stations); audio.js adds a
+// helicopter rotor loop, per-weapon gunshot pitch and a shop cash-register
+// sound. Mute silences everything (all gains hang off the master gain).
 export function createAudio() {
   const audio = {
     ctx: null,
@@ -24,7 +27,8 @@ export function createAudio() {
       audio.master.connect(audio.ctx.destination);
       audio.started = true;
       audio.startEngine();
-      audio.startMusic();
+      // Music is owned by radio.js in v2 (3 stations); audio.init only
+      // starts the engine hum here.
     } catch {
       audio.ctx = null;
     }
@@ -121,13 +125,13 @@ export function createAudio() {
     setTimeout(() => audio.blip(1320, 0.16), 180);
   };
 
-  audio.gunshot = function gunshot() {
+  audio.gunshot = function gunshot(freq = 900) {
     if (!audio.ctx) return;
     const src = audio.ctx.createBufferSource();
     src.buffer = noiseBuffer(0.14);
     const filter = audio.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.value = 900;
+    filter.frequency.value = freq;
     const g = audio.ctx.createGain();
     g.gain.setValueAtTime(0.5, audio.ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audio.ctx.currentTime + 0.14);
@@ -135,6 +139,50 @@ export function createAudio() {
     filter.connect(g);
     g.connect(audio.master);
     src.start();
+  };
+
+  // Helicopter rotor: looped filtered noise with a 13 Hz thump (LFO on gain).
+  audio.startHeliRotor = function startHeliRotor() {
+    if (!audio.ctx || audio.heliSrc) return;
+    const src = audio.ctx.createBufferSource();
+    src.buffer = noiseBuffer(2);
+    src.loop = true;
+    const filter = audio.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 420;
+    const g = audio.ctx.createGain();
+    g.gain.value = 0.05;
+    const lfo = audio.ctx.createOscillator();
+    lfo.frequency.value = 13;
+    const lfoGain = audio.ctx.createGain();
+    lfoGain.gain.value = 0.035;
+    lfo.connect(lfoGain);
+    lfoGain.connect(g.gain);
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(audio.master);
+    src.start();
+    lfo.start();
+    audio.heliSrc = src;
+    audio.heliLfo = lfo;
+    audio.heliGain = g;
+  };
+
+  audio.stopHeliRotor = function stopHeliRotor() {
+    if (!audio.ctx || !audio.heliSrc) return;
+    const src = audio.heliSrc;
+    const lfo = audio.heliLfo;
+    setTimeout(() => {
+      try { src.stop(); lfo.stop(); } catch { /* already stopped */ }
+    }, 300);
+    audio.heliSrc = null;
+    audio.heliLfo = null;
+  };
+
+  // Shop cash-register cha-ching.
+  audio.chaChing = function chaChing() {
+    audio.cash();
+    setTimeout(() => audio.blip(1568, 0.12), 160);
   };
 
   audio.thud = function thud() {

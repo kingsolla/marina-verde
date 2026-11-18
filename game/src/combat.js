@@ -1,6 +1,8 @@
 // Marina Verde — combat. A pistol with limited ammo (hitscan, tracer line,
 // muzzle flash) and a close-range punch. Enemies are the rival crew peds:
-// they shoot back when the player is near and armed.
+// they shoot back when the player is near and armed. v2: the four-weapon
+// arsenal lives in weapons.js (fireWeapon) and shares this cooldown/tracer
+// bookkeeping; shoot() below stays as the pistol path for compatibility.
 import * as THREE from 'three';
 
 export function createCombat() {
@@ -12,6 +14,17 @@ export function createCombat() {
     tracers: [], // {line, until}
     muzzle: null,
   };
+}
+
+// Clear cooldowns and remove any live tracer lines (used on respawn).
+export function resetCombat(combat, scene) {
+  combat.cooldown = 0;
+  combat.punchCooldown = 0;
+  for (const t of combat.tracers) {
+    scene.remove(t.line);
+    t.line.geometry.dispose();
+  }
+  combat.tracers = [];
 }
 
 export function shoot(combat, scene, from, dir, targets, onHit) {

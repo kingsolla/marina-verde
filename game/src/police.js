@@ -31,16 +31,23 @@ export function policeDemand(stars) {
   return 4;
 }
 
+// Callsigns for the MVPD RESPONSE panel (DESIGN §10.2): UNIT 11, UNIT 12, …
+let _callsign = 10;
 export function spawnPoliceCar(scene, x, z, heading) {
   const car = createCar(x, z, heading, 0xf2f2f2, true);
   car.driver = 'police';
+  car.callsign = `UNIT ${String((_callsign += 1)).padStart(2, '0')}`;
   car.ai = { speed: 0, ram: 0 };
   scene.add(car.mesh);
   return car;
 }
 
 // Steer a police car toward the player with a simple pursuit + ramming model.
-export function updatePolice(car, dt, playerPos, playerSpeed, colliders, allCars) {
+// At 5 stars the police are 10% faster (DESIGN §3). When the player is on
+// foot and the car is right on top of them it STOPS (targetSpeed 0) so the
+// bust can actually land — otherwise it would drive straight through at
+// 6 m/s and the 2.5 s bust timer could never complete (G-TOP2 fix).
+export function updatePolice(car, dt, playerPos, playerSpeed, colliders, allCars, stars = 0, playerOnFoot = false) {
   const dx = playerPos.x - car.x;
   const dz = playerPos.z - car.z;
   const dist = Math.hypot(dx, dz) || 0.001;
@@ -52,8 +59,12 @@ export function updatePolice(car, dt, playerPos, playerSpeed, colliders, allCars
   car.heading += Math.max(-turnRate * dt, Math.min(turnRate * dt, dh));
   // Police are a touch faster than the player's top speed at high stars, and
   // they ram: full throttle when lined up, brake when very close.
-  const targetSpeed = dist < 4 ? 6 : Math.min(40, 24 + playerSpeed * 0.55 + dist * 0.05);
+  const boost = stars >= 5 ? 1.1 : 1;
+  const targetSpeed = dist < 4 ? (playerOnFoot ? 0 : 6) : Math.min(40, 24 + playerSpeed * 0.55 + dist * 0.05) * boost;
   car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 1.6);
+  // Hard stop on top of an on-foot player: the car must not overshoot and
+  // drive through them (that made the 2.5 s bust timer unreachable).
+  if (playerOnFoot && dist < 4) car.speed = 0;
   const nx = car.x + Math.sin(car.heading) * car.speed * dt;
   const nz = car.z + Math.cos(car.heading) * car.speed * dt;
   const hit = collideCircle(colliders, nx, nz, 1.9);

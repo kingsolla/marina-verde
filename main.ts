@@ -4,7 +4,8 @@
 // game/vendor/, no network request at play time). This program hands it in: it
 // copies game/ and screenshots/ from beside this file to /output and writes
 // /output/dossier.json, the summary the judge reads, with the vendored
-// make.fun library.
+// make.fun library. v2 "Full Tide": twelve missions, helicopter, radio,
+// shops, four weapons, Turf Ledger — same entry program, richer game.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

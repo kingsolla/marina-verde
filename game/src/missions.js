@@ -1,7 +1,11 @@
-// Marina Verde — missions and story. Five jobs in order, each a short chain of
-// steps the game tracks: reach a place, get in a car, lose the heat, or defeat
-// the rival crew. The module owns the objective text, the beacon marker and
-// the dialogue the player sees.
+// Marina Verde — missions and story. Twelve jobs in three acts, each a short
+// chain of steps the game tracks: reach a place, get in a car, lose the heat,
+// defeat the rival crew — plus v2 step kinds: timed (beat the clock), follow
+// (tail a car without being spotted), stealth (reach a place gaining 0 stars),
+// survive (stay alive for T seconds), buy (purchase a shop item), deliverCar
+// (steal a specific car and deliver it) and race (checkpoint race vs a rival).
+// The module owns the objective text, the beacon marker and the dialogue
+// the player sees.
 import * as THREE from 'three';
 import { MISSIONS, PLACES } from './config.js';
 
@@ -13,7 +17,27 @@ export function createMissionState() {
     done: false, // all missions complete
     banner: null, // {title, text, until} for the on-screen banner
     toast: null,
+    // Per-step transient state, reset on every step change.
+    stepState: freshStepState(),
   };
+}
+
+export function freshStepState() {
+  return {
+    timer: 0, // timed / survive / race countdown
+    followTime: 0, // follow: seconds inside the 8–25 m band
+    spottedTimer: 0, // follow: seconds inside 8 m (spotted at 3 s)
+    starsAtStart: 0, // stealth: stars when the step began
+    surviveTimer: 0,
+    raceCp: 0, // race: checkpoints passed
+    raceRival: null, // race: the rival car object
+    raceWaypoints: [],
+    started: false, // step setup done (timers seeded, rivals spawned)
+  };
+}
+
+export function resetStepState(state) {
+  state.stepState = freshStepState();
 }
 
 export function currentMission(state) {
@@ -31,17 +55,35 @@ export function objectiveText(state) {
   const m = currentMission(state);
   if (!m) return 'Free roam — Marina Verde is yours. Press M for the next job.';
   const step = currentStep(state);
+  const ss = state.stepState;
   let text = step.text;
   if (step.kind === 'defeat') {
     text = `Deal with the rival crew (${Math.max(0, step.count - state.defeated)} left)`;
+  } else if (step.kind === 'timed') {
+    text = `${step.text} — ${Math.max(0, Math.ceil(ss.timer))} s left`;
+  } else if (step.kind === 'survive') {
+    text = `${step.text} — ${Math.max(0, Math.ceil(ss.timer))} s left`;
+  } else if (step.kind === 'follow') {
+    text = `${step.text} — ${Math.floor(ss.followTime)}/${step.seconds} s`;
+  } else if (step.kind === 'race') {
+    text = `${step.text} — ${Math.max(0, Math.ceil(ss.timer))} s left · checkpoint ${ss.raceCp}/${step.checkpoints.length}`;
   }
   return `${m.title}: ${text}`;
 }
 
 export function stepTarget(state) {
   const step = currentStep(state);
-  if (!step || step.kind !== 'goto') return null;
-  return PLACES[step.at] ?? null;
+  if (!step) return null;
+  if (step.kind === 'goto' || step.kind === 'timed' || step.kind === 'stealth' || step.kind === 'survive') {
+    return PLACES[step.at] ?? null;
+  }
+  if (step.kind === 'buy' || step.kind === 'deliverCar') return PLACES[step.at] ?? null;
+  if (step.kind === 'race') {
+    const cps = step.checkpoints ?? [];
+    if (state.stepState.raceCp < cps.length) return PLACES[cps[state.stepState.raceCp]] ?? null;
+    return PLACES[step.at] ?? null;
+  }
+  return null;
 }
 
 // Advance one step; returns the mission just completed, if any.
@@ -50,6 +92,7 @@ export function advanceStep(state, game) {
   if (!m) return null;
   state.step += 1;
   state.defeated = 0;
+  resetStepState(state);
   if (state.step >= m.steps.length) {
     game.money += m.reward;
     game.onMissionComplete?.(m);
@@ -60,8 +103,10 @@ export function advanceStep(state, game) {
       return m;
     }
     const next = MISSIONS[state.index];
+    // Act banners on missions 5 (index 4) and 9 (index 8).
+    const actTitle = state.index === 4 ? 'ACT II — HEAT RISING' : state.index === 8 ? 'ACT III — FULL TIDE' : `Job complete — $${m.reward}`;
     state.banner = {
-      title: `Job complete — $${m.reward}`,
+      title: actTitle,
       text: `Next: ${next.title} — ${next.giver}: ${next.brief}`,
       until: game.time + 6,
     };
@@ -75,8 +120,10 @@ export function startMission(state, game, index) {
   state.step = 0;
   state.defeated = 0;
   state.done = false;
+  resetStepState(state);
   const m = MISSIONS[index];
-  state.banner = { title: m.title, text: `${m.giver}: ${m.brief}`, until: game.time + 7 };
+  const actTitle = index === 4 ? 'ACT II — HEAT RISING' : index === 8 ? 'ACT III — FULL TIDE' : index === 0 ? 'ACT I — SMALL JOBS' : m.title;
+  state.banner = { title: actTitle, text: `${m.giver}: ${m.brief}`, until: game.time + 7 };
 }
 
 // The glowing objective beacon: a pulsing column + a floating diamond.

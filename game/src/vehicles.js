@@ -1,28 +1,58 @@
 // Marina Verde — cars. One factory builds every car mesh (player cars, traffic,
 // police); one arcade physics step drives the player's car; one AI step drives
-// traffic along the road grid.
+// traffic along the road grid. v2 adds body styles (sedan / sport / van),
+// a handbrake/drift (Space), smoother 16-segment wheels and a beveled look
+// (sloped windshield, fenders, spoiler on the sport style).
 import * as THREE from 'three';
 import { CAR, PALETTE, ROAD_LINES } from './config.js';
 import { mulberry32, pick, range } from './rng.js';
 import { collideCircle } from './world.js';
 
-export function makeCarMesh(color, isPolice = false) {
+export function makeCarMesh(color, isPolice = false, style = 'sedan') {
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ color });
+  const isSport = style === 'sport';
+  const isVan = style === 'van';
+  const bodyMat = isSport
+    ? new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.25 })
+    : new THREE.MeshLambertMaterial({ color });
   const darkMat = new THREE.MeshLambertMaterial({ color: 0x1c2733 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.7, 4.4), bodyMat);
-  body.position.y = 0.55;
+  const len = isSport ? 5.0 : isVan ? 4.8 : 4.4;
+  const bodyH = isVan ? 1.15 : isSport ? 0.55 : 0.7;
+  const bodyY = isVan ? 0.85 : isSport ? 0.48 : 0.55;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2, bodyH, len), bodyMat);
+  body.position.y = bodyY;
   body.castShadow = true;
   group.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.62, 2.2), darkMat);
-  cabin.position.set(0, 1.18, -0.25);
+  // Sloped windshield plane + cabin (beveled look, not a plain box).
+  const shield = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 1.1), darkMat);
+  shield.position.set(0, bodyY + bodyH / 2 + 0.28, 0.85);
+  shield.rotation.x = 0.5;
+  group.add(shield);
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, isVan ? 0.9 : 0.62, isVan ? 2.6 : 2.2),
+    isVan ? bodyMat : darkMat,
+  );
+  cabin.position.set(0, bodyY + bodyH / 2 + (isVan ? 0.45 : 0.28), isVan ? 0 : -0.25);
   cabin.castShadow = true;
   group.add(cabin);
+  // Fender half-cylinders were cut for draw-call budget (DESIGN §8): the
+  // body + sloped windshield + spoiler already give the car its shape.
   // Hood + trunk hints.
   const hood = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.16, 0.9), bodyMat);
-  hood.position.set(0, 0.95, 1.75);
+  hood.position.set(0, bodyY + bodyH / 2 + 0.02, len / 2 - 0.45);
   group.add(hood);
-  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 10);
+  if (isSport) {
+    // Spoiler on the sport style.
+    const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.08, 0.4), darkMat);
+    spoiler.position.set(0, bodyY + 0.75, -len / 2 + 0.25);
+    group.add(spoiler);
+    for (const s of [-0.7, 0.7]) {
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.1), darkMat);
+      strut.position.set(s, bodyY + 0.55, -len / 2 + 0.25);
+      group.add(strut);
+    }
+  }
+  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 16);
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x141414 });
   const wheels = [];
   for (const [wx, wz] of [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]]) {
@@ -33,17 +63,15 @@ export function makeCarMesh(color, isPolice = false) {
     group.add(wheel);
     wheels.push(wheel);
   }
-  // Headlights + taillights.
+  // Headlight + taillight bars (one mesh each — draw-call budget, DESIGN §8).
   const headMat = new THREE.MeshBasicMaterial({ color: 0xfff6c0 });
   const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
-  for (const s of [-0.6, 0.6]) {
-    const h = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.1), headMat);
-    h.position.set(s, 0.62, 2.22);
-    group.add(h);
-    const t = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.1), tailMat);
-    t.position.set(s, 0.62, -2.22);
-    group.add(t);
-  }
+  const headBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.1), headMat);
+  headBar.position.set(0, bodyY, len / 2 + 0.02);
+  group.add(headBar);
+  const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.18, 0.1), tailMat);
+  tailBar.position.set(0, bodyY, -len / 2 - 0.02);
+  group.add(tailBar);
   let lightBar = null;
   if (isPolice) {
     // White body with black doors is handled by the caller's colour; the light
@@ -55,16 +83,16 @@ export function makeCarMesh(color, isPolice = false) {
     blue.position.x = 0.35;
     lightBar.add(red);
     lightBar.add(blue);
-    lightBar.position.set(0, 1.62, -0.25);
+    lightBar.position.set(0, bodyY + bodyH / 2 + 0.55, -0.25);
     lightBar.userData = { red, blue };
     group.add(lightBar);
   }
-  group.userData = { wheels, lightBar };
+  group.userData = { wheels, lightBar, bodyMat, style };
   return group;
 }
 
-export function createCar(x, z, heading, color, isPolice = false) {
-  const mesh = makeCarMesh(color, isPolice);
+export function createCar(x, z, heading, color, isPolice = false, style = 'sedan') {
+  const mesh = makeCarMesh(color, isPolice, style);
   mesh.position.set(x, 0, z);
   mesh.rotation.y = heading;
   return {
@@ -76,6 +104,10 @@ export function createCar(x, z, heading, color, isPolice = false) {
     steer: 0,
     color,
     isPolice,
+    style,
+    // Sport is +15% top speed, van is -15%.
+    maxSpeedMul: style === 'sport' ? 1.15 : style === 'van' ? 0.85 : 1,
+    handicap: 1, // mission damage (mission 11 in v1 design) lowers this
     driver: null, // 'player' | 'traffic' | 'police' | null (parked)
     ai: null,
     health: 100,
@@ -84,22 +116,29 @@ export function createCar(x, z, heading, color, isPolice = false) {
 }
 
 // --- Player arcade driving -------------------------------------------------
+// input.handbrake (Space): turn rate x1.6, speed decays faster, grip drops so
+// the rear slides — a drift.
 export function drivePlayerCar(car, input, dt, colliders, others) {
   const forward = input.forward ? 1 : 0;
   const back = input.back ? 1 : 0;
   const steerInput = (input.left ? 1 : 0) - (input.right ? 1 : 0);
   const reversing = car.speed < -0.5;
+  const handbrake = !!input.handbrake;
+  const maxSpeed = CAR.maxSpeed * (car.maxSpeedMul ?? 1) * (car.handicap ?? 1);
 
   if (forward) car.speed += CAR.accel * dt;
   if (back) car.speed -= (car.speed > 0.5 ? CAR.brake : CAR.accel * 0.6) * dt;
   if (!forward && !back) {
-    car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 8 * dt);
+    car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), (handbrake ? 20 : 8) * dt);
   }
-  car.speed = Math.max(-CAR.maxReverse, Math.min(CAR.maxSpeed, car.speed));
+  if (handbrake) car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 10 * dt);
+  car.speed = Math.max(-CAR.maxReverse, Math.min(maxSpeed, car.speed));
 
   const steerTarget = steerInput * (reversing ? -1 : 1);
-  car.steer += (steerTarget - car.steer) * Math.min(1, dt * CAR.grip);
-  const turn = car.steer * CAR.turnRate * dt * Math.min(1, Math.abs(car.speed) / 6);
+  const grip = handbrake ? CAR.grip * 0.45 : CAR.grip;
+  car.steer += (steerTarget - car.steer) * Math.min(1, dt * grip);
+  const turnRate = CAR.turnRate * (handbrake ? 1.6 : 1);
+  const turn = car.steer * turnRate * dt * Math.min(1, Math.abs(car.speed) / 6);
   car.heading += turn;
 
   const nx = car.x + Math.sin(car.heading) * car.speed * dt;
@@ -108,7 +147,12 @@ export function drivePlayerCar(car, input, dt, colliders, others) {
   const blocked = hit.x !== nx || hit.z !== nz;
   car.x = hit.x;
   car.z = hit.z;
-  if (blocked) car.speed *= 0.55;
+  // Hard wall hit: the car's CONDITION (health) drops — the car panel shows
+  // it, Rosa's Garage repairs it (DESIGN §10.5).
+  if (blocked) {
+    if (Math.abs(car.speed) > 8) car.health = Math.max(0, car.health - Math.min(8, Math.abs(car.speed) * 0.3));
+    car.speed *= 0.55;
+  }
   // Soft bumps against other cars.
   for (const o of others) {
     if (o === car) continue;
@@ -130,8 +174,8 @@ export function drivePlayerCar(car, input, dt, colliders, others) {
     wheels[i].rotation.x += car.speed * dt * 2.4;
     if (i < 2) wheels[i].rotation.y = car.steer * 0.32;
   }
-  // Body roll and pitch, tiny but felt.
-  car.mesh.rotation.z = -car.steer * Math.min(1, Math.abs(car.speed) / 20) * 0.05;
+  // Body roll and pitch, tiny but felt; a handbrake slide leans harder.
+  car.mesh.rotation.z = -car.steer * Math.min(1, Math.abs(car.speed) / 20) * (handbrake ? 0.09 : 0.05);
   car.mesh.rotation.x = -Math.min(1, Math.abs(car.speed) / 30) * 0.02 * (car.speed >= 0 ? 1 : -1);
   return car.speed;
 }
@@ -148,12 +192,13 @@ export function makeTrafficCar(rand, x, z) {
     ? { x: range(rand, -170, 170), z: line.at + lane }
     : { x: line.at + lane, z: range(rand, -170, 170) };
   const heading = alongX ? (dir > 0 ? Math.PI / 2 : -Math.PI / 2) : dir > 0 ? 0 : Math.PI;
-  const car = createCar(pos.x, pos.z, heading, pick(rand, PALETTE.car));
+  const style = rand() < 0.18 ? 'sport' : rand() < 0.18 ? 'van' : 'sedan';
+  const car = createCar(pos.x, pos.z, heading, pick(rand, PALETTE.car), false, style);
   car.driver = 'traffic';
   car.ai = {
     axis: line.axis,
     dir,
-    speed: range(rand, 7, 12),
+    speed: range(rand, 7, 12) * (style === 'sport' ? 1.1 : style === 'van' ? 0.9 : 1),
     turnAt: null,
     wait: 0,
   };
@@ -243,7 +288,8 @@ export function spawnParkedCars(scene, rand, count) {
     if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 8)) continue;
     spots.push({ x, z });
     const heading = alongX ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : side > 0 ? 0 : Math.PI;
-    const car = createCar(x, z, heading, pick(rand, PALETTE.car));
+    const style = rand() < 0.18 ? 'sport' : rand() < 0.18 ? 'van' : 'sedan';
+    const car = createCar(x, z, heading, pick(rand, PALETTE.car), false, style);
     car.driver = null;
     scene.add(car.mesh);
     cars.push(car);

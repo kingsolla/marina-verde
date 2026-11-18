@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Marina Verde — Open World</title>
+<title>Marina Verde: Full Tide — Open World</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #0c141c; font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -15,7 +15,7 @@
   #minimap-wrap { position: absolute; left: 18px; bottom: 18px; width: 168px; height: 168px; border-radius: 50%; overflow: hidden; border: 3px solid rgba(255,255,255,.75); box-shadow: 0 2px 14px rgba(0,0,0,.55); background: #0c141c; }
   #minimap { width: 168px; height: 168px; display: block; }
   #status { position: absolute; left: 200px; bottom: 22px; display: flex; flex-direction: column; gap: 6px; }
-  #stars { font-size: 26px; letter-spacing: 3px; color: #ffd24a; }
+  #stars { position: absolute; top: 56px; right: 20px; font-size: 26px; letter-spacing: 3px; color: #ffd24a; }
   #stars .dim { color: rgba(255,255,255,.35); }
   #stars.hot { animation: pulse .7s infinite alternate; }
   @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
@@ -26,10 +26,61 @@
   #health-fill.bad { background: linear-gradient(90deg, #d94040, #ff7a5c); }
   #health-row { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
   #money { position: absolute; top: 16px; right: 20px; font-size: 30px; font-weight: 800; color: #7be495; }
-  #clock { position: absolute; top: 54px; right: 20px; font-size: 17px; font-weight: 600; color: #ffe9b0; }
-  #speed { position: absolute; right: 20px; bottom: 22px; font-size: 26px; font-weight: 800; text-align: right; }
-  #ammo { position: absolute; right: 20px; bottom: 56px; font-size: 15px; font-weight: 600; color: #ffe9b0; }
-  #objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); max-width: 46vw; background: rgba(10,18,26,.72); border: 1px solid rgba(255,210,74,.6); border-radius: 10px; padding: 9px 16px; font-size: 15px; font-weight: 600; text-align: center; }
+  #clock { position: absolute; top: 92px; right: 20px; font-size: 17px; font-weight: 600; color: #ffe9b0; }
+  #sight-badge { position: absolute; top: 118px; right: 20px; font-size: 13px; font-weight: 800; letter-spacing: 1px; padding: 3px 10px; border-radius: 6px; background: rgba(10,18,26,.7); border: 1px solid rgba(255,255,255,.4); color: #ffe9b0; opacity: 0; transition: opacity .2s; }
+  #sight-badge.show { opacity: 1; }
+  #sight-badge.sight { color: #ff8a7a; border-color: #ff6a5c; }
+  #car-panel { position: absolute; right: 20px; bottom: 22px; text-align: right; background: rgba(10,18,26,.62); border: 1px solid rgba(255,255,255,.25); border-radius: 10px; padding: 8px 14px; opacity: 0; transition: opacity .2s; }
+  #car-panel.show { opacity: 1; }
+  #car-name { font-size: 14px; font-weight: 800; letter-spacing: 1px; color: #ffe9b0; }
+  #car-condition { font-size: 12.5px; font-weight: 700; color: #7be495; }
+  #car-row { display: flex; gap: 14px; justify-content: flex-end; align-items: baseline; }
+  #speed { font-size: 26px; font-weight: 800; }
+  #car-gear { font-size: 20px; font-weight: 800; color: #ffd24a; }
+  #ammo { font-size: 15px; font-weight: 600; color: #ffe9b0; }
+  #weapon-slots { position: absolute; right: 20px; top: 186px; display: flex; gap: 6px; }
+  #weapon-slots .slot { background: rgba(10,18,26,.72); border: 1px solid rgba(255,255,255,.4); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; font-weight: 700; }
+  #weapon-slots .slot.current { border-color: #ffd24a; color: #ffd24a; }
+  #weapon-slots .slot.locked { opacity: .35; }
+  #radio-line { position: absolute; right: 20px; top: 152px; font-size: 15px; font-weight: 700; color: #9fd8e8; }
+  .eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; margin-left: 6px; vertical-align: middle; }
+  .eq i { width: 3px; background: #9fd8e8; animation: eq 0.7s infinite ease-in-out alternate; }
+  .eq i:nth-child(1) { height: 5px; animation-delay: 0s; }
+  .eq i:nth-child(2) { height: 11px; animation-delay: .12s; }
+  .eq i:nth-child(3) { height: 7px; animation-delay: .24s; }
+  .eq i:nth-child(4) { height: 12px; animation-delay: .36s; }
+  .eq i:nth-child(5) { height: 6px; animation-delay: .48s; }
+  @keyframes eq { from { transform: scaleY(.4); } to { transform: scaleY(1); } }
+  #district { position: absolute; left: 200px; bottom: 92px; font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #ffe9b0; text-transform: uppercase; }
+  #rep-wrap { position: absolute; left: 200px; bottom: 64px; width: 220px; }
+  #rep-label { font-size: 12.5px; font-weight: 800; letter-spacing: 1px; color: #7be495; }
+  #rep-bar { height: 8px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.4); border-radius: 4px; overflow: hidden; margin-top: 3px; }
+  #rep-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #37c978, #ffd24a); transition: width .3s; }
+  #left-col { position: absolute; left: 18px; top: 16px; width: 310px; display: flex; flex-direction: column; gap: 10px; }
+  #mission-panel { background: rgba(10,18,26,.72); border: 1px solid rgba(255,210,74,.6); border-radius: 10px; padding: 10px 14px; }
+  #mission-act { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #ffd24a; }
+  #mission-name { font-size: 19px; font-weight: 800; margin-top: 2px; }
+  #mission-timer { font-size: 15px; font-weight: 800; color: #ff8a7a; margin-top: 2px; }
+  #mission-timer:empty { display: none; }
+  #mission-objective { font-size: 14px; line-height: 1.4; margin-top: 4px; color: #eef4f7; }
+  #mission-stage { height: 8px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.4); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  #mission-stage-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffd24a, #f07f2f); transition: width .3s; }
+  #mission-stage-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #ffe9b0; margin-top: 3px; }
+  #mission-next { font-size: 12.5px; font-weight: 700; color: #9fd8e8; margin-top: 5px; }
+  #mvpd-panel { background: rgba(10,18,26,.72); border: 1px solid rgba(255,106,92,.55); border-radius: 10px; padding: 10px 14px; display: none; }
+  #mvpd-panel.show { display: block; }
+  #mvpd-title { font-size: 13px; font-weight: 800; letter-spacing: 1px; color: #ff8a7a; }
+  .mvpd-row { display: flex; gap: 8px; align-items: center; font-size: 13.5px; font-weight: 700; margin-top: 5px; }
+  .mvpd-unit { flex: 1; }
+  .mvpd-dist { color: #ffe9b0; }
+  .chip { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.35); border-radius: 5px; padding: 1px 7px; font-size: 11px; font-weight: 800; letter-spacing: .5px; }
+  .chip.ram { background: #d94040; border-color: #ff8a7a; }
+  .chip.lock { background: #7a2fd0; border-color: #c96fd0; }
+  .chip.block { background: #2f6fd0; border-color: #9fd8e8; }
+  #controls-hint { font-size: 12.5px; line-height: 1.7; color: rgba(255,255,255,.85); background: rgba(10,18,26,.55); border-radius: 8px; padding: 8px 12px; }
+  #gps-dist { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); font-size: 15px; font-weight: 800; color: #ffd24a; background: rgba(10,18,26,.6); border-radius: 8px; padding: 4px 12px; }
+  #heli-warning { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); background: rgba(120,10,10,.85); border: 1px solid #ff6a5c; border-radius: 8px; padding: 6px 14px; font-size: 14px; font-weight: 800; color: #fff; opacity: 0; transition: opacity .2s; animation: pulse .7s infinite alternate; }
+  #heli-warning.show { opacity: 1; }
   #prompt { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); background: rgba(10,18,26,.8); border-radius: 8px; padding: 8px 14px; font-size: 15px; font-weight: 700; opacity: 0; transition: opacity .15s; }
   #prompt.show { opacity: 1; }
   #toast { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); background: rgba(10,18,26,.85); border-radius: 8px; padding: 8px 14px; font-size: 14px; opacity: 0; transition: opacity .2s; }
@@ -38,11 +89,21 @@
   #banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   #banner-title { font-size: 44px; font-weight: 900; color: #ffd24a; letter-spacing: 1px; }
   #banner-text { font-size: 18px; margin-top: 6px; color: #fff; }
-  #dialog { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(560px, 80vw); background: rgba(10,18,26,.88); border-left: 4px solid #ffd24a; border-radius: 10px; padding: 12px 16px; opacity: 0; transition: opacity .25s; }
+  #dialog { position: absolute; left: 50%; bottom: 210px; transform: translateX(-50%); width: min(560px, 80vw); background: rgba(10,18,26,.88); border-left: 4px solid #ffd24a; border-radius: 10px; padding: 12px 16px; opacity: 0; transition: opacity .25s; display: flex; gap: 12px; align-items: center; }
   #dialog.show { opacity: 1; }
+  #dialog-portrait { flex: none; width: 46px; height: 46px; border-radius: 50%; background: #e86a5a; color: #fff; font-size: 24px; font-weight: 900; display: flex; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,.7); }
   #dialog-name { color: #ffd24a; font-weight: 800; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
   #dialog-text { font-size: 16px; margin-top: 4px; line-height: 1.45; }
-  #controls-hint { position: absolute; left: 18px; top: 16px; font-size: 12.5px; line-height: 1.7; color: rgba(255,255,255,.85); background: rgba(10,18,26,.55); border-radius: 8px; padding: 8px 12px; }
+
+  /* --- Full map screen (DESIGN §10.6) --- */
+  #map-screen .map-panel { display: flex; gap: 18px; align-items: flex-start; max-width: 1060px; padding: 18px; text-align: left; }
+  #map-canvas { border: 3px solid rgba(255,255,255,.75); border-radius: 12px; background: #0c141c; width: 620px; height: 620px; }
+  .map-side { width: 340px; display: flex; flex-direction: column; gap: 12px; }
+  .map-side h3 { font-size: 15px; letter-spacing: 1px; color: #ffd24a; margin-bottom: 6px; }
+  .map-side h2 { font-size: 22px; color: #fff; letter-spacing: 1px; }
+  #map-ledger, #map-missions { background: rgba(10,18,26,.85); border: 1px solid rgba(255,210,74,.45); border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+  .map-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+  .map-row.active { color: #ffd24a; font-weight: 700; }
 
   /* --- Overlays --- */
   .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: linear-gradient(160deg, rgba(8,20,32,.82), rgba(20,8,20,.78)); color: #fff; text-align: center; }
@@ -56,8 +117,17 @@
   button { pointer-events: auto; cursor: pointer; font: inherit; font-size: 18px; font-weight: 800; color: #14202a; background: #ffd24a; border: none; border-radius: 10px; padding: 13px 34px; margin: 4px; box-shadow: 0 4px 0 #c79a1d; }
   button:hover { background: #ffe08a; }
   button.secondary { background: #e8eef2; box-shadow: 0 4px 0 #9aa7b0; }
-  #mute-btn { position: absolute; top: 92px; right: 20px; font-size: 13px; padding: 7px 12px; }
+  #mute-btn { position: absolute; top: 226px; right: 20px; font-size: 13px; padding: 7px 12px; }
   #title .panel { margin-top: -40px; }
+
+  /* --- Shop overlay --- */
+  #shop .panel { max-width: 520px; }
+  #shop h1 { font-size: 34px; }
+  #shop-rep { font-size: 14px; color: #7be495; margin-top: 6px; font-weight: 600; }
+  #shop-cash { font-size: 15px; color: #ffd24a; margin-top: 4px; font-weight: 800; }
+  #shop-items { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+  .shop-item { width: 100%; text-align: left; font-size: 16px; padding: 11px 18px; background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,210,74,.5); box-shadow: none; }
+  .shop-item:hover { background: rgba(255,210,74,.25); }
 </style>
 <script type="importmap">
 { "imports": { "three": "./vendor/three.module.min.js" } }
@@ -68,33 +138,54 @@
 <div id="load-error"></div>
 
 <div id="hud">
+  <div id="left-col">
+    <div id="mission-panel">
+      <div id="mission-act">ACT I — SMALL JOBS</div>
+      <div id="mission-name">1 · Wheels Up</div>
+      <div id="mission-timer"></div>
+      <div id="mission-objective"></div>
+      <div id="mission-stage"><div id="mission-stage-fill"></div></div>
+      <div id="mission-stage-row"><span id="mission-stage-text">0 / 12</span><span>STAGE</span></div>
+      <div id="mission-next"></div>
+    </div>
+    <div id="mvpd-panel">
+      <div id="mvpd-title">MVPD RESPONSE — <span id="mvpd-count"></span></div>
+      <div id="mvpd-list"></div>
+    </div>
+    <div id="controls-hint">WASD move / drive &nbsp;·&nbsp; Mouse look &nbsp;·&nbsp; Space handbrake<br>E enter / exit car / shop &nbsp;·&nbsp; E on a moving car: carjack<br>1–4 weapons &nbsp;·&nbsp; Q cycle &nbsp;·&nbsp; R radio &nbsp;·&nbsp; V punch<br>Shift run &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M map<br>Street Race marker on the beachfront (after mission 11)</div>
+  </div>
   <div id="minimap-wrap"><canvas id="minimap" width="168" height="168"></canvas></div>
   <div id="status">
-    <div id="stars">★★★★★</div>
     <div id="health-row"><div id="health-bar"><div id="health-fill" class="ok"></div></div><span id="health-text">100</span></div>
   </div>
+  <div id="district">Marina Verde</div>
+  <div id="rep-wrap"><div id="rep-label">REP 0 / 3 — TURF LEDGER</div><div id="rep-bar"><div id="rep-fill"></div></div></div>
   <div id="money">$250</div>
-  <div id="clock">16:40</div>
-  <div id="speed"></div>
-  <div id="ammo"></div>
-  <div id="objective"></div>
+  <div id="stars">★★★★★</div>
+  <div id="clock">DAY 1 16:40</div>
+  <div id="sight-badge"></div>
+  <div id="radio-line">♪ Verde FM</div>
+  <div id="heli-warning"></div>
+  <div id="weapon-slots"></div>
+  <div id="car-panel"><div id="car-name"></div><div id="car-condition"></div><div id="car-row"><span id="speed"></span><span id="car-gear"></span></div><div id="ammo"></div></div>
+  <div id="gps-dist"></div>
   <div id="prompt"></div>
   <div id="toast"></div>
   <div id="banner"><div id="banner-title"></div><div id="banner-text"></div></div>
-  <div id="dialog"><div id="dialog-name"></div><div id="dialog-text"></div></div>
-  <div id="controls-hint">WASD move / drive &nbsp;·&nbsp; Mouse look<br>E enter / exit car &nbsp;·&nbsp; Click shoot<br>V punch &nbsp;·&nbsp; Shift run &nbsp;·&nbsp; P pause &nbsp;·&nbsp; M mission</div>
+  <div id="dialog"><div id="dialog-portrait">R</div><div><div id="dialog-name"></div><div id="dialog-text"></div></div></div>
 </div>
 
 <div id="title" class="overlay show">
   <div class="panel">
     <h1>MARINA VERDE</h1>
-    <h2>An Open-World Story</h2>
+    <h2>Full Tide</h2>
     <p>A sun-soaked coastal city of pastel towers, palm boulevards and one very bad idea.
     You are <b>Nico Vale</b>, a courier with no money and a fast-car problem.
-    Rosa and Marco have five jobs for you — steal, deliver, outrun the law, and make it to the yacht.</p>
+    Rosa runs the crew and Marco drives getaway — twelve jobs for you: steal, deliver, tail, race, outrun the law and the helicopter, and make it to the yacht.</p>
     <div class="keys">
-      <b>W A S D</b> walk / drive &nbsp; <b>Mouse</b> look &nbsp; <b>E</b> enter / exit car<br>
-      <b>Click</b> shoot &nbsp; <b>V</b> punch &nbsp; <b>Shift</b> run &nbsp; <b>P</b> pause &nbsp; <b>M</b> mission brief
+      <b>W A S D</b> walk / drive &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> handbrake / drift<br>
+      <b>E</b> enter / exit car / shop &nbsp; <b>Click</b> shoot &nbsp; <b>V</b> punch<br>
+      <b>1–4</b> weapons &nbsp; <b>Q</b> cycle weapon &nbsp; <b>R</b> radio &nbsp; <b>P</b> pause &nbsp; <b>M</b> mission brief
     </div>
     <button id="play-btn">Start New Game</button>
     <button id="continue-btn" class="secondary">Continue</button>
@@ -107,6 +198,28 @@
     <p>Marina Verde waits for no one — except right now.</p>
     <button id="resume-btn">Resume</button>
     <button id="restart-btn" class="secondary">Restart (clear save)</button>
+  </div>
+</div>
+
+<div id="shop" class="overlay">
+  <div class="panel">
+    <h1 id="shop-title">Shop</h1>
+    <div id="shop-rep"></div>
+    <div id="shop-cash"></div>
+    <div id="shop-items"></div>
+    <button id="shop-close" class="secondary">Close (E)</button>
+  </div>
+</div>
+
+<div id="map-screen" class="overlay">
+  <div class="map-panel">
+    <canvas id="map-canvas" width="620" height="620"></canvas>
+    <div class="map-side">
+      <h2>MARINA VERDE — FULL MAP</h2>
+      <div id="map-ledger"></div>
+      <div id="map-missions"></div>
+      <button id="map-close" class="secondary">Close (M)</button>
+    </div>
   </div>
 </div>
 

@@ -1,5 +1,7 @@
 // Marina Verde — seeded random helpers. One tiny module so the city, traffic and
 // missions all draw from the same deterministic stream for a given seed.
+// v2 adds `chance` (a one-line probability roll used by the world builder and
+// the pedestrian tourist variants).
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function next() {
@@ -21,6 +23,11 @@ export function range(rand, min, max) {
 
 export function rangeInt(rand, min, max) {
   return min + Math.floor(rand() * (max - min + 1));
+}
+
+// One-line probability roll: true with probability p (0..1).
+export function chance(rand, p) {
+  return rand() < p;
 }
 
 // A stable hash of a string, so block (i, j) always seeds the same way.

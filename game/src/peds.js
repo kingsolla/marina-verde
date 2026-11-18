@@ -1,16 +1,18 @@
 // Marina Verde — pedestrians. They stroll the sidewalks, cross at corners, and
 // scatter when a car comes at them or the wanted level climbs. A few are
-// scripted as rival crew for the combat mission.
+// scripted as rival crew for the combat mission. v2: sphere heads, slightly
+// rounded (cylinder) torsos, beach tourist variants with sun hats, and more
+// shirt colours — 40 peds in the city.
 import * as THREE from 'three';
-import { mulberry32, pick, range, rangeInt } from './rng.js';
+import { mulberry32, pick, range, rangeInt, chance } from './rng.js';
 import { ROAD_LINES } from './config.js';
 import { collideCircle } from './world.js';
 
-const SHIRTS = [0xff8a5c, 0x38b6a0, 0xf2c230, 0xc96fd0, 0x5a8fd0, 0xe8e8e8, 0x7a9b5a];
+const SHIRTS = [0xff8a5c, 0x38b6a0, 0xf2c230, 0xc96fd0, 0x5a8fd0, 0xe8e8e8, 0x7a9b5a, 0xff5a8a, 0x2fd0a8, 0xffd24a];
 const SKINS = [0xf2c9a0, 0xd9a066, 0x8a5a34, 0xf7d7b0];
 const PANTS = [0x2a2f38, 0x4a5a7a, 0x7a6a4a, 0x3a3f46];
 
-export function makePersonMesh(shirt, pants, skin, hostile = false) {
+export function makePersonMesh(shirt, pants, skin, hostile = false, tourist = false) {
   const g = new THREE.Group();
   const skinMat = new THREE.MeshLambertMaterial({ color: skin });
   const shirtMat = new THREE.MeshLambertMaterial({ color: shirt });
@@ -19,10 +21,14 @@ export function makePersonMesh(shirt, pants, skin, hostile = false) {
   legL.position.set(-0.14, 0.4, 0);
   const legR = legL.clone();
   legR.position.x = 0.14;
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.72, 0.34), shirtMat);
+  // Rounded torso: a slightly tapered cylinder instead of a box.
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, 0.72, 12), shirtMat);
   torso.position.y = 1.16;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.34), skinMat);
-  head.position.y = 1.72;
+  torso.scale.z = 0.62;
+  // Sphere head (v2 — no more box heads). Shoulder spheres were cut for the
+  // draw-call budget (DESIGN §8); the rounded torso carries the silhouette.
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), skinMat);
+  head.position.y = 1.74;
   const armL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.18), shirtMat);
   armL.position.set(-0.42, 1.18, 0);
   const armR = armL.clone();
@@ -36,15 +42,26 @@ export function makePersonMesh(shirt, pants, skin, hostile = false) {
     band.position.y = 1.86;
     g.add(band);
   }
+  if (tourist) {
+    // Beach tourist: a straw sun hat (cone + brim disc).
+    const hatMat = new THREE.MeshLambertMaterial({ color: 0xf2d8a7 });
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 14), hatMat);
+    brim.position.y = 1.9;
+    const top = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.22, 12), hatMat);
+    top.position.y = 2.0;
+    g.add(brim, top);
+  }
   return g;
 }
 
 export function createPed(x, z, rand, hostile = false) {
+  const tourist = !hostile && chance(rand, 0.18);
   const mesh = makePersonMesh(
     hostile ? 0xd94040 : pick(rand, SHIRTS),
     pick(rand, PANTS),
     pick(rand, SKINS),
     hostile,
+    tourist,
   );
   mesh.position.set(x, 0, z);
   return {
@@ -59,6 +76,7 @@ export function createPed(x, z, rand, hostile = false) {
     targetZ: z,
     wait: range(rand, 0, 3),
     hostile,
+    tourist,
     health: hostile ? 60 : 100,
     retarget: 0,
   };

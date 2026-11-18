@@ -21,6 +21,7 @@ import { createAudio } from './audio.js';
 import { createInput } from './input.js';
 import { createHud, updateHud, drawMinimap, showToast, showBanner, showDialog, openMap, closeMap } from './hud.js';
 import { stageShot } from './shots.js';
+import { getShotPreset, formatSaveSummary } from './graphics-polish.js';
 
 const SAVE_KEY = 'marina-verde-save-v2';
 
@@ -115,7 +116,7 @@ export async function boot() {
   // controls, so hide the hint panel — with 5 MVPD units it grew into the
   // minimap and its last line was clipped. Only the 4 known shot names
   // trigger this; arbitrary ?shot= values leave the HUD untouched.
-  if (['cover', 'chase', 'street', 'hud'].includes(shotName)) {
+  if (['cover', 'chase', 'street', 'hud', 'beach'].includes(shotName)) {
     document.body.classList.add('shot-mode');
   }
 
@@ -284,7 +285,7 @@ export async function boot() {
 
   function spawnSportsCoupe() {
     if (game.sportsCoupe) return game.sportsCoupe;
-    const car = createCar(118, 190, Math.PI / 2, 0xd94040, false, 'sport');
+    const car = createCar(118, 190, Math.PI / 2, 0xd94040, false, 'sport', { glow: true });
     car.isSportsCoupe = true;
     scene.add(car.mesh);
     allCars.push(car);
@@ -865,6 +866,19 @@ export async function boot() {
   const restartBtn = document.getElementById('restart-btn');
   const hasSave = !!localStorage.getItem(SAVE_KEY);
   continueBtn.style.display = hasSave ? '' : 'none';
+  // Polish 2 Q7: the save slot is visible on the title screen — read-only
+  // summary (renderTitleSaveSummary); a corrupt save hides the line.
+  const saveSummaryEl = document.getElementById('save-summary');
+  if (saveSummaryEl) {
+    let summary = null;
+    try { summary = formatSaveSummary(localStorage.getItem(SAVE_KEY), MISSIONS); } catch { summary = null; }
+    if (summary) {
+      saveSummaryEl.textContent = summary;
+      saveSummaryEl.style.display = '';
+    } else {
+      saveSummaryEl.style.display = 'none';
+    }
+  }
 
   function startPlaying(fromSave) {
     if (fromSave) loadGame();

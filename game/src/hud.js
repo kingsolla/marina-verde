@@ -11,7 +11,7 @@ import { ROAD_LINES, ROAD_MIN, ROAD_MAX, BEACH_Z, SEA_Z, SHOPS, PLACES, WEAPON_O
 
 const MINIMAP_SIZE = 168;
 const WORLD_SPAN = 460; // world metres shown across the minimap
-const MAP_SIZE = 620; // full-map canvas (square, same world span)
+const MAP_SIZE = 500; // full-map canvas (square, same world span)
 
 function worldToMap(x, z) {
   const s = MINIMAP_SIZE / WORLD_SPAN;
@@ -78,6 +78,8 @@ export function createHud() {
     mapCtx: el('map-canvas') ? el('map-canvas').getContext('2d') : null,
     mapLedger: el('map-ledger'),
     mapMissions: el('map-missions'),
+    mapLegend: el('map-legend'),
+    mapStats: el('map-stats'),
     lastToast: 0,
     _c: {}, // DOM write cache: only touch the DOM when a value actually changes
     _mvpdT: -1,
@@ -504,6 +506,43 @@ const MAP_DISTRICTS = [
   { name: 'EASTSIDE', x0: 104, x1: 230, z0: -104, z1: 156, color: 'rgba(255, 138, 92, 0.14)' },
 ];
 
+// Polish 2 Q8: LEGEND + STATS for the full map — built ONLY from state
+// that really exists (player/GPS, active mission, safehouse, shops, street
+// race, police, helicopter, search zone). No collectible / property /
+// bounty categories: those features do not exist in this game.
+export function drawLegend(hud, game) {
+  if (!hud.mapLegend) return;
+  const rows = [
+    ['➤', 'Player / GPS route'],
+    ['◆', 'Active mission'],
+    ['⌂', 'Safehouse'],
+    ['$', 'Shops — Verde Arms · Rosa\'s Garage · Coral Clinic'],
+    ['⚑', 'Street race start'],
+    ['●', 'MVPD unit'],
+    ['H', 'Police helicopter'],
+    ['○', 'Search zone (when wanted)'],
+  ];
+  setHtml(hud, hud.mapLegend, 'maplegend', '<h3>LEGEND</h3>'
+    + rows.map(([g, t]) => `<div class="map-row"><span class="map-glyph">${g}</span><span>${t}</span></div>`).join(''));
+}
+
+export function drawStats(hud, game) {
+  if (!hud.mapStats) return;
+  const ledger = game.ledger || { jobsByDistrict: {}, rep: 0, races: { played: 0, wins: 0, bestMs: 0 } };
+  const jobs = Object.values(ledger.jobsByDistrict || {}).reduce((a, b) => a + b, 0);
+  const discount = Math.min(15, (ledger.rep ?? 0) * 5);
+  const races = ledger.races ?? { played: 0, wins: 0, bestMs: 0 };
+  const mins = Math.floor((game.time || 0) / 60);
+  const secs = Math.floor((game.time || 0) % 60);
+  setHtml(hud, hud.mapStats, 'mapstats', '<h3>STATS</h3>'
+    + `<div class="map-row"><span>Cash</span><span><b>$${(game.money ?? 0).toLocaleString('en-US')}</b></span></div>`
+    + `<div class="map-row"><span>Respect (Turf Ledger)</span><span><b>REP ${ledger.rep ?? 0} / 3</b></span></div>`
+    + `<div class="map-row"><span>Shop discount</span><span><b>${discount}%</b></span></div>`
+    + `<div class="map-row"><span>Jobs done</span><span><b>${jobs} / 12</b></span></div>`
+    + `<div class="map-row"><span>Street races</span><span><b>${races.wins}W / ${races.played} played</b></span></div>`
+    + `<div class="map-row"><span>Session time</span><span><b>${mins}:${String(secs).padStart(2, '0')}</b></span></div>`);
+}
+
 export function openMap(hud, game) {
   if (!hud.mapScreen) return;
   game.state = 'map';
@@ -524,9 +563,10 @@ export function drawMap(hud, game) {
   ctx.clearRect(0, 0, S, S);
   ctx.fillStyle = '#0c141c';
   ctx.fillRect(0, 0, S, S);
-  // Sea (south) + sand band.
+  // Sea (south) + sand band — Polish 2 Q8: brighter turquoise sea so the
+  // island reads like the coastal-day concept (same transform as before).
   const sea = worldToBigMap(0, SEA_Z);
-  ctx.fillStyle = '#1e7fa0';
+  ctx.fillStyle = '#1599b8';
   ctx.fillRect(0, sea.y, S, S - sea.y);
   const sand = worldToBigMap(0, BEACH_Z);
   ctx.fillStyle = '#d9bd7f';
@@ -544,7 +584,7 @@ export function drawMap(hud, game) {
     ctx.fillText(d.name, (a.x + b.x) / 2, (a.y + b.y) / 2);
   }
   // Roads.
-  ctx.strokeStyle = '#8a94a3';
+  ctx.strokeStyle = '#aab4c2';
   ctx.lineWidth = 5;
   for (const line of ROAD_LINES) {
     ctx.beginPath();
@@ -673,4 +713,6 @@ export function drawMap(hud, game) {
       const cls = i === game.missions.index ? 'map-row active' : 'map-row';
       return `<div class="${cls}"><span>${st} ${m.title}</span><span>$${m.reward}</span></div>`;
     }).join(''));
+  drawLegend(hud, game);
+  drawStats(hud, game);
 }

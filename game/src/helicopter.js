@@ -10,7 +10,11 @@ export function helicopterDemand(stars) {
 
 export function createHelicopter(scene, haloTex = null) {
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xd8dee2, roughness: 0.45, metalness: 0.3 });
+  // Polish 2 Q6: dark MVPD body (was pale grey 0xd8dee2 — read as a grey
+  // ball at distance), red stripe, brighter glass. Same part count + tail
+  // fin; the searchlight cone is stronger; a ground shadow blob tracks the
+  // heli (1 extra draw call, no new light). Detection logic untouched.
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x232a33, roughness: 0.4, metalness: 0.35 });
   // Rounded body: cylinder with sphere ends (capsule-ish), not a box.
   const body = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 4.2, 16), bodyMat);
   body.rotation.x = Math.PI / 2;
@@ -47,7 +51,15 @@ export function createHelicopter(scene, haloTex = null) {
   const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.4, 0.3), new THREE.MeshLambertMaterial({ color: 0x888888 }));
   tailRotor.position.set(0.4, 0.4, -7);
   group.add(tailRotor);
-  // Main rotor: two blades + a translucent blur disc when spinning.
+  // Tail fin (dark, MVPD livery).
+  const tailFin = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 1.8, 1.4),
+    new THREE.MeshLambertMaterial({ color: 0x232a33 }),
+  );
+  tailFin.position.set(0, 1.1, -6.9);
+  group.add(tailFin);
+  // Main rotor: two blades. (No blur disc: at screenshot distance it read
+  // as a grey saucer over the heli.)
   const rotor = new THREE.Group();
   const bladeMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
   for (const s of [-1, 1]) {
@@ -57,13 +69,6 @@ export function createHelicopter(scene, haloTex = null) {
   }
   rotor.position.y = 1.7;
   group.add(rotor);
-  const blur = new THREE.Mesh(
-    new THREE.CircleGeometry(5.6, 24),
-    new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false }),
-  );
-  blur.rotation.x = -Math.PI / 2;
-  blur.position.y = 1.72;
-  group.add(blur);
   // Skids.
   const skidMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
   for (const s of [-1, 1]) {
@@ -74,7 +79,7 @@ export function createHelicopter(scene, haloTex = null) {
   // Searchlight cone (translucent) + red navigation light.
   const cone = new THREE.Mesh(
     new THREE.ConeGeometry(7, 30, 20, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.14, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xfff2a0, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }),
   );
   group.add(cone);
   const navLight = new THREE.Mesh(
@@ -96,12 +101,23 @@ export function createHelicopter(scene, haloTex = null) {
   }
   group.visible = false;
   scene.add(group);
+  // Ground shadow: a soft dark ellipse on the ground under the heli,
+  // positioned each frame by updateHelicopter (opacity fades with height).
+  const groundShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(3.4, 20),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25, depthWrite: false }),
+  );
+  groundShadow.rotation.x = -Math.PI / 2;
+  groundShadow.position.y = 0.06;
+  groundShadow.visible = false;
+  scene.add(groundShadow);
   return {
     mesh: group,
     rotor,
     tailRotor,
     cone,
     navLight,
+    groundShadow,
     angle: 0,
     active: false,
     height: 30, // orbit height (m); shots may stage it lower for framing
@@ -113,6 +129,7 @@ export function createHelicopter(scene, haloTex = null) {
 export function updateHelicopter(heli, dt, playerPos, onFoot, time) {
   if (!heli.active) {
     heli.mesh.visible = false;
+    if (heli.groundShadow) heli.groundShadow.visible = false;
     return;
   }
   heli.mesh.visible = true;
@@ -120,6 +137,11 @@ export function updateHelicopter(heli, dt, playerPos, onFoot, time) {
   const x = playerPos.x + Math.cos(heli.angle) * heli.radius;
   const z = playerPos.z + Math.sin(heli.angle) * heli.radius;
   heli.mesh.position.set(x, heli.height, z);
+  if (heli.groundShadow) {
+    heli.groundShadow.visible = true;
+    heli.groundShadow.position.set(x, 0.06, z);
+    heli.groundShadow.material.opacity = Math.max(0.12, Math.min(0.4, 0.45 - heli.height * 0.008));
+  }
   heli.mesh.rotation.y = Math.atan2(playerPos.x - x, playerPos.z - z);
   heli.rotor.rotation.y += dt * 22;
   heli.tailRotor.rotation.z += dt * 30;

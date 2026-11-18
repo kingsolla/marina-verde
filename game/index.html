@@ -35,8 +35,8 @@
   #car-name { font-size: 14px; font-weight: 800; letter-spacing: 1px; color: #ffe9b0; }
   #car-condition { font-size: 12.5px; font-weight: 700; color: #7be495; }
   #car-row { display: flex; gap: 14px; justify-content: flex-end; align-items: baseline; }
-  #speed { font-size: 26px; font-weight: 800; }
-  #car-gear { font-size: 20px; font-weight: 800; color: #ffd24a; }
+  #speed { font-size: 46px; font-weight: 900; line-height: 1; }
+  #car-gear { font-size: 22px; font-weight: 800; color: #ffd24a; }
   #ammo { font-size: 15px; font-weight: 600; color: #ffe9b0; }
   #weapon-slots { position: absolute; right: 20px; top: 186px; display: flex; gap: 6px; }
   #weapon-slots .slot { background: rgba(10,18,26,.72); border: 1px solid rgba(255,255,255,.4); border-radius: 6px; padding: 3px 8px; font-size: 12.5px; font-weight: 700; }
@@ -82,6 +82,9 @@
      controls); .hidden is toggled by hud.js when the left column would
      otherwise reach the minimap — the whole hint hides, never clips. */
   body.shot-mode #controls-hint, #controls-hint.hidden { display: none; }
+  /* Polish 2 Q2: in shot mode the dialog moves to the lower-left, clear of
+     the chase-cam car (which sits dead-centre) and of the minimap. */
+  body.shot-mode #dialog { left: 18px; transform: none; width: 400px; bottom: 210px; }
   #gps-dist { position: absolute; left: 50%; top: 64px; transform: translateX(-50%); font-size: 15px; font-weight: 800; color: #ffd24a; background: rgba(10,18,26,.6); border-radius: 8px; padding: 4px 12px; }
   #heli-warning { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); background: rgba(120,10,10,.85); border: 1px solid #ff6a5c; border-radius: 8px; padding: 6px 14px; font-size: 14px; font-weight: 800; color: #fff; opacity: 0; transition: opacity .2s; animation: pulse .7s infinite alternate; }
   #heli-warning.show { opacity: 1; }
@@ -100,12 +103,22 @@
   #dialog-text { font-size: 16px; margin-top: 4px; line-height: 1.45; }
 
   /* --- Full map screen (DESIGN §10.6) --- */
-  #map-screen .map-panel { display: flex; gap: 18px; align-items: flex-start; max-width: 1060px; padding: 18px; text-align: left; }
-  #map-canvas { border: 3px solid rgba(255,255,255,.75); border-radius: 12px; background: #0c141c; width: 620px; height: 620px; }
-  .map-side { width: 340px; display: flex; flex-direction: column; gap: 12px; }
-  .map-side h3 { font-size: 15px; letter-spacing: 1px; color: #ffd24a; margin-bottom: 6px; }
-  .map-side h2 { font-size: 22px; color: #fff; letter-spacing: 1px; }
-  #map-ledger, #map-missions { background: rgba(10,18,26,.85); border: 1px solid rgba(255,210,74,.45); border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+  #map-screen .map-panel { display: flex; gap: 14px; align-items: flex-start; max-width: 1060px; padding: 10px; text-align: left; }
+  #map-canvas { border: 3px solid rgba(255,255,255,.75); border-radius: 12px; background: #0c141c; width: 500px; height: 500px; }
+  .map-left { display: flex; flex-direction: column; gap: 10px; }
+  .map-side { width: 340px; display: flex; flex-direction: column; gap: 4px; }
+  #map-missions { font-size: 12.5px; line-height: 1.35; }
+  #map-missions .map-row { padding: 0; }
+  .map-side h3 { font-size: 14px; letter-spacing: 1px; color: #ffd24a; margin-bottom: 3px; }
+  .map-side h2 { font-size: 18px; color: #fff; letter-spacing: 1px; }
+  #map-ledger, #map-missions, #map-stats { background: rgba(10,18,26,.85); border: 1px solid rgba(255,210,74,.45); border-radius: 10px; padding: 6px 12px; font-size: 13px; line-height: 1.4; }
+  /* Legend lives UNDER the canvas as a 2-column strip so the whole map
+     screen fits 720p: side column (ledger + stats + missions) + canvas +
+     legend must all be visible at once. */
+  #map-legend { width: 500px; background: rgba(10,18,26,.85); border: 1px solid rgba(255,210,74,.45); border-radius: 10px; padding: 6px 12px; font-size: 13px; line-height: 1.4; }
+  #map-legend h3 { font-size: 14px; letter-spacing: 1px; color: #ffd24a; margin-bottom: 4px; }
+  #map-legend .map-row { display: inline-flex; width: 48%; }
+  .map-glyph { color: #ffd24a; font-weight: 800; min-width: 20px; text-align: center; }
   .map-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
   .map-row.active { color: #ffd24a; font-weight: 700; }
 
@@ -113,7 +126,17 @@
   .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: linear-gradient(160deg, rgba(8,20,32,.82), rgba(20,8,20,.78)); color: #fff; text-align: center; }
   .overlay.show { display: flex; }
   .panel { max-width: 640px; padding: 32px; }
-  .panel h1 { font-size: 64px; font-weight: 900; letter-spacing: 2px; color: #ffd24a; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+  .panel h1 { font-size: 64px; font-weight: 900; letter-spacing: 2px; text-shadow: 0 4px 0 rgba(0,0,0,.35); }
+  /* Polish 2 Q7: gradient logo (pink -> gold -> teal), like a neon sunset. */
+  #title h1 { background: linear-gradient(92deg, #ff5fa2 5%, #ffd24a 45%, #38b6a0 95%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  #save-summary { font-size: 14px; font-weight: 700; color: #7be495; margin-top: 10px; }
+  /* Title two-column layout: story + menu left, HOW TO PLAY right. */
+  #title .panel { max-width: 880px; display: flex; gap: 28px; text-align: left; align-items: flex-start; flex-wrap: wrap; }
+  #title .title-main { flex: 1 1 420px; text-align: center; }
+  #title .title-howto { flex: 1 1 260px; background: rgba(10,18,26,.75); border: 1px solid rgba(255,210,74,.45); border-radius: 12px; padding: 16px 18px; font-size: 14px; line-height: 1.65; }
+  #title .title-howto h3 { color: #ffd24a; letter-spacing: 1px; font-size: 15px; margin-bottom: 8px; }
+  #title .title-howto b { color: #ffd24a; }
+  #title .panel p, #title .panel .keys { text-align: left; }
   .panel h2 { font-size: 20px; font-weight: 600; color: #9fd8e8; margin-top: 2px; letter-spacing: 4px; text-transform: uppercase; }
   .panel p { font-size: 16.5px; line-height: 1.6; margin: 18px 0; color: #eef4f7; }
   .panel .keys { font-size: 14px; line-height: 2; color: #cfe3ea; margin-bottom: 22px; }
@@ -129,6 +152,7 @@
      it stay readable; the shop panel itself gets a near-opaque background
      so its items stay legible. HUD z-index is NOT raised (it must not
      cover the shop panel). Other overlays keep the dark backdrop. */
+  #title { background: linear-gradient(160deg, rgba(8,20,32,.94), rgba(20,8,20,.92)); }
   #shop { background: linear-gradient(160deg, rgba(8,20,32,.55), rgba(20,8,20,.52)); }
   #shop .panel { background: rgba(10,18,26,.92); border: 1px solid rgba(255,210,74,.45); border-radius: 14px; }
   #shop .panel { max-width: 520px; }
@@ -187,18 +211,29 @@
 
 <div id="title" class="overlay show">
   <div class="panel">
-    <h1>MARINA VERDE</h1>
-    <h2>Full Tide</h2>
-    <p>A sun-soaked coastal city of pastel towers, palm boulevards and one very bad idea.
-    You are <b>Nico Vale</b>, a courier with no money and a fast-car problem.
-    Rosa runs the crew and Marco drives getaway — twelve jobs for you: steal, deliver, tail, race, outrun the law and the helicopter, and make it to the yacht.</p>
-    <div class="keys">
-      <b>W A S D</b> walk / drive &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> handbrake / drift<br>
-      <b>E</b> enter / exit car / shop &nbsp; <b>Click</b> shoot &nbsp; <b>V</b> punch<br>
-      <b>1–4</b> weapons &nbsp; <b>Q</b> cycle weapon &nbsp; <b>R</b> radio &nbsp; <b>P</b> pause &nbsp; <b>M</b> mission brief
+    <div class="title-main">
+      <h1>MARINA VERDE</h1>
+      <h2>Full Tide</h2>
+      <p>A sun-soaked coastal city of pastel towers, palm boulevards and one very bad idea.
+      You are <b>Nico Vale</b>, a courier with no money and a fast-car problem.
+      Rosa runs the crew and Marco drives getaway — twelve jobs for you: steal, deliver, tail, race, outrun the law and the helicopter, and make it to the yacht.</p>
+      <div class="keys">
+        <b>W A S D</b> walk / drive &nbsp; <b>Mouse</b> look &nbsp; <b>Space</b> handbrake / drift<br>
+        <b>E</b> enter / exit car / shop &nbsp; <b>Click</b> shoot &nbsp; <b>V</b> punch<br>
+        <b>1–4</b> weapons &nbsp; <b>Q</b> cycle weapon &nbsp; <b>R</b> radio &nbsp; <b>P</b> pause &nbsp; <b>M</b> mission brief
+      </div>
+      <button id="play-btn">Start New Game</button>
+      <button id="continue-btn" class="secondary">Continue</button>
+      <div id="save-summary" style="display:none"></div>
     </div>
-    <button id="play-btn">Start New Game</button>
-    <button id="continue-btn" class="secondary">Continue</button>
+    <div class="title-howto">
+      <h3>HOW TO PLAY</h3>
+      <div><b>Drive</b> — WASD to drive, Space to handbrake-drift. Press E near a car to get in; E on a moving car carjacks it (the law notices).</div>
+      <div><b>Jobs</b> — follow the gold GPS line to the objective. 12 story jobs in 3 acts, plus a repeatable street race on the beachfront.</div>
+      <div><b>Heat</b> — crimes raise wanted stars. Break line of sight and the MVPD starts SEARCHING; stay hidden 10 s to lose them.</div>
+      <div><b>Gear up</b> — Verde Arms sells weapons, Rosa's Garage repairs &amp; repaints, the Coral Clinic heals, the Safehouse saves.</div>
+      <div><b>Turf</b> — finish jobs to raise your Turf Ledger rep and earn shop discounts, up to 15%.</div>
+    </div>
   </div>
 </div>
 
@@ -223,10 +258,14 @@
 
 <div id="map-screen" class="overlay">
   <div class="map-panel">
-    <canvas id="map-canvas" width="620" height="620"></canvas>
+    <div class="map-left">
+      <canvas id="map-canvas" width="500" height="500"></canvas>
+      <div id="map-legend"></div>
+    </div>
     <div class="map-side">
       <h2>MARINA VERDE — FULL MAP</h2>
       <div id="map-ledger"></div>
+      <div id="map-stats"></div>
       <div id="map-missions"></div>
       <button id="map-close" class="secondary">Close (M)</button>
     </div>

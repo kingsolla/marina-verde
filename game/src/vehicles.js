@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CAR, PALETTE, ROAD_LINES } from './config.js';
 import { mulberry32, pick, range } from './rng.js';
 import { collideCircle } from './world.js';
+import { makeGlowSprite } from './graphics-polish.js';
 
 // Shared geometries + trim materials (P7 cleanup): every car reuses the
 // same boxes/cylinders instead of allocating its own per car — fewer unique
@@ -37,7 +38,13 @@ const SHARED_MAT = {
   tail: new THREE.MeshBasicMaterial({ color: 0xff2a2a }),
 };
 
-export function makeCarMesh(color, isPolice = false, style = 'sedan') {
+// Polish 2 Q1: lower / wider / sleeker proportions via MESH TRANSFORMS
+// only — the shared BoxGeometry/CylinderGeometry above is never mutated,
+// so every car sharing it keeps its own look, and the collider / root /
+// wheel references / Box3 collision are untouched. opts.glow adds tail
+// glow sprites, but ONLY for the hero sports coupe and police cars (halo
+// budget: at most 2 + 5 sprites; traffic never gets them).
+export function makeCarMesh(color, isPolice = false, style = 'sedan', opts = {}) {
   const group = new THREE.Group();
   const isSport = style === 'sport';
   const isVan = style === 'van';
@@ -52,45 +59,58 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan') {
   const darkMat = SHARED_MAT.dark;
   const len = isSport ? 5.0 : isVan ? 4.8 : 4.4;
   const bodyH = isVan ? 1.15 : isSport ? 0.55 : 0.7;
-  const bodyY = isVan ? 0.85 : isSport ? 0.48 : 0.55;
+  const bodyY = isVan ? 0.85 : isSport ? 0.44 : 0.52;
+  // Visual body height after the mesh-scale below (sport is squashed
+  // flatter, sedan slightly lower); part positions use this, not bodyH.
+  const visH = bodyH * (isSport ? 0.8 : isVan ? 1 : 0.92);
   const body = new THREE.Mesh(SHARED_GEO.body[style] ?? SHARED_GEO.body.sedan, bodyMat);
   body.position.y = bodyY;
+  if (isSport) body.scale.set(1.08, 0.8, 1.02);
+  else if (!isVan) body.scale.set(1.03, 0.92, 1);
   body.castShadow = true;
   group.add(body);
   // Sloped windshield plane + cabin (beveled look, not a plain box).
   const shield = new THREE.Mesh(SHARED_GEO.shield, darkMat);
-  shield.position.set(0, bodyY + bodyH / 2 + 0.28, 0.85);
-  shield.rotation.x = 0.5;
+  shield.position.set(0, bodyY + visH / 2 + 0.28, isSport ? 0.95 : 0.85);
+  shield.rotation.x = isSport ? 0.62 : 0.5;
   group.add(shield);
   const cabin = new THREE.Mesh(
     isVan ? SHARED_GEO.cabin.van : SHARED_GEO.cabin.sedan,
     isVan ? bodyMat : darkMat,
   );
-  cabin.position.set(0, bodyY + bodyH / 2 + (isVan ? 0.45 : 0.28), isVan ? 0 : -0.25);
+  cabin.position.set(0, bodyY + visH / 2 + (isVan ? 0.45 : 0.28), isVan ? 0 : isSport ? -0.35 : -0.25);
+  if (isSport) cabin.scale.set(1, 0.85, 0.95);
   cabin.castShadow = true;
   group.add(cabin);
   // Fender half-cylinders were cut for draw-call budget (DESIGN §8): the
   // body + sloped windshield + spoiler already give the car its shape.
   // Hood + trunk hints.
   const hood = new THREE.Mesh(SHARED_GEO.hood, bodyMat);
-  hood.position.set(0, bodyY + bodyH / 2 + 0.02, len / 2 - 0.45);
+  hood.position.set(0, bodyY + visH / 2 + 0.02, len / 2 - 0.45);
+  if (isSport) { hood.rotation.x = 0.08; hood.scale.set(1.04, 1, 1.15); }
   group.add(hood);
   if (isSport) {
-    // Spoiler on the sport style.
+    // Spoiler on the sport style — wider + deeper wing, on taller struts.
     const spoiler = new THREE.Mesh(SHARED_GEO.spoiler, darkMat);
-    spoiler.position.set(0, bodyY + 0.75, -len / 2 + 0.25);
+    spoiler.scale.set(1.12, 1, 1.7);
+    spoiler.position.set(0, bodyY + 0.72, -len / 2 + 0.25);
     group.add(spoiler);
     for (const s of [-0.7, 0.7]) {
       const strut = new THREE.Mesh(SHARED_GEO.strut, darkMat);
+      strut.scale.set(1, 1.25, 1);
       strut.position.set(s, bodyY + 0.55, -len / 2 + 0.25);
       group.add(strut);
     }
+    // (No extra splitter mesh: the sport look comes from the transforms
+    // above — one more mesh per sport car would cost ~8 draw calls city-wide.)
   }
   const wheels = [];
   for (const [wx, wz] of [[-0.95, 1.45], [0.95, 1.45], [-0.95, -1.45], [0.95, -1.45]]) {
     const wheel = new THREE.Mesh(SHARED_GEO.wheel, SHARED_MAT.wheel);
     wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(wx, 0.36, wz);
+    // Bigger, more visible wheels (transform only): radius 0.36 -> ~0.40.
+    wheel.scale.set(1.1, 1.1, 1.1);
+    wheel.position.set(wx, 0.38, wz);
     wheel.castShadow = true;
     group.add(wheel);
     wheels.push(wheel);
@@ -98,10 +118,21 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan') {
   // Headlight + taillight bars (one mesh each — draw-call budget, DESIGN §8).
   const headBar = new THREE.Mesh(SHARED_GEO.lightBar, SHARED_MAT.head);
   headBar.position.set(0, bodyY, len / 2 + 0.02);
+  if (isSport) headBar.scale.set(1.06, 1.3, 1);
   group.add(headBar);
   const tailBar = new THREE.Mesh(SHARED_GEO.lightBar, SHARED_MAT.tail);
   tailBar.position.set(0, bodyY, -len / 2 - 0.02);
+  if (isSport) tailBar.scale.set(1.06, 2.0, 1);
   group.add(tailBar);
+  // Tail glow (hero coupe only): two red halo sprites at the tail corners.
+  // Traffic / parked sports get none — halo budget (max 16 visible).
+  if (opts.glow && isSport) {
+    for (const s of [-0.7, 0.7]) {
+      const glow = makeGlowSprite(0xff2a2a, 0.65, 2.6);
+      glow.position.set(s, bodyY, -len / 2 - 0.15);
+      group.add(glow);
+    }
+  }
   let lightBar = null;
   if (isPolice) {
     // White body with black doors is handled by the caller's colour; the light
@@ -121,16 +152,23 @@ export function makeCarMesh(color, isPolice = false, style = 'sedan') {
     blue.position.z = 0.3;
     lightBar.add(red);
     lightBar.add(blue);
-    lightBar.position.set(0, bodyY + bodyH / 2 + 0.78, -0.25);
+    lightBar.position.set(0, bodyY + visH / 2 + 0.78, -0.25);
     lightBar.userData = { red, blue };
     group.add(lightBar);
+    // One glow sprite over the light bar (police only): reads as a flashing
+    // beacon at night from 20 m. Halo budget counts it (<= 5 police).
+    if (opts.glow) {
+      const barGlow = makeGlowSprite(0xff5566, 0.35, 3.2);
+      barGlow.position.set(0, bodyY + visH / 2 + 0.78, -0.25);
+      group.add(barGlow);
+    }
   }
   group.userData = { wheels, lightBar, bodyMat, style };
   return group;
 }
 
-export function createCar(x, z, heading, color, isPolice = false, style = 'sedan') {
-  const mesh = makeCarMesh(color, isPolice, style);
+export function createCar(x, z, heading, color, isPolice = false, style = 'sedan', opts = {}) {
+  const mesh = makeCarMesh(color, isPolice, style, opts);
   mesh.position.set(x, 0, z);
   mesh.rotation.y = heading;
   return {

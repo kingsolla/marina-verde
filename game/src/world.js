@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { CITY, ROAD_MIN, ROAD_MAX, BEACH_Z, SEA_Z, CITY_HALF, PALETTE, ROAD_LINES, PLACES } from './config.js';
 import { mulberry32, pick, range, rangeInt, hash2, chance } from './rng.js';
+import { buildFerrisWheel } from './graphics-polish.js';
 
 const STEP = CITY.BLOCK_STEP;
 
@@ -149,6 +150,19 @@ function asphaltTexture(rand, axis = 'x') {
   // Baked markings: double yellow centre line (continuous) + white edge
   // lines. Horizontal in canvas = along-road for X roads; vertical = along
   // road for Z roads (their texture repeat runs the other way).
+  // Polish 2 Q3: a PAINTED specular streak (stylised highlight, not a
+  // reflection) — a soft warm band down the middle of the road that reads
+  // as wet asphalt catching the sunset. Fixed geometry, NO rand() draws,
+  // so the world RNG stream is untouched.
+  {
+    const streak = g.createLinearGradient(0, 96, 0, 160);
+    streak.addColorStop(0, 'rgba(255,225,170,0)');
+    streak.addColorStop(0.5, 'rgba(255,225,170,0.14)');
+    streak.addColorStop(1, 'rgba(255,225,170,0)');
+    g.fillStyle = streak;
+    if (axis === 'x') g.fillRect(0, 96, 256, 64);
+    else g.fillRect(96, 0, 64, 256);
+  }
   const line = (x, y, w, h) => g.fillRect(x, y, w, h);
   g.fillStyle = 'rgba(245,200,60,0.85)';
   if (axis === 'x') {
@@ -350,9 +364,12 @@ export function buildWorld(scene) {
   // and p95 3317->5100 ms with it (SwiftShader pays per light per fragment).
   // The sky top/horizon/fog/sun values below are UNTOUCHED (playtest pins them).
   const SKY_MODES = {
-    day: { top: 0x3f7fc9, horizon: 0xffd9a0, fog: 0x9fd0e8, sun: 0xffe8b8, sunI: 2.1, hemiI: 1.15, ball: 0xfff2c0, roadRough: 0.9, glint: 0.15 },
-    sunset: { top: 0x5a4a8a, horizon: 0xff9a5c, fog: 0xd88a6a, sun: 0xffb36a, sunI: 1.6, hemiI: 0.9, ball: 0xffc46a, roadRough: 0.5, glint: 0.3 },
-    night: { top: 0x0d1738, horizon: 0x24365f, fog: 0x16233f, sun: 0x8aa8ff, sunI: 0.8, hemiI: 1.0, ball: 0xd8e4ff, roadRough: 0.45, glint: 0.06 },
+    day: { top: 0x3f7fc9, horizon: 0xffd9a0, fog: 0x9fd0e8, sun: 0xffe8b8, sunI: 2.1, hemiI: 1.15, ball: 0xfff2c0, roadRough: 0.9, glint: 0.15, sunPos: [120, 180, -80] },
+    // Polish 2 Q3: warmer sunset horizon (pink-orange, was 0xff9a5c) and a
+    // LOW sun position so shadows stretch long at golden hour. Top colours
+    // are pinned by the playtest — only horizon + sun position move.
+    sunset: { top: 0x5a4a8a, horizon: 0xff8a6e, fog: 0xd88a6a, sun: 0xffb36a, sunI: 1.6, hemiI: 0.9, ball: 0xffc46a, roadRough: 0.5, glint: 0.3, sunPos: [230, 95, -30] },
+    night: { top: 0x0d1738, horizon: 0x24365f, fog: 0x16233f, sun: 0x8aa8ff, sunI: 0.8, hemiI: 1.0, ball: 0xd8e4ff, roadRough: 0.45, glint: 0.06, sunPos: [90, 190, 60] },
   };
   world.skyMode = 'day';
   world.setSkyMode = function setSkyMode(mode) {
@@ -364,6 +381,7 @@ export function buildWorld(scene) {
     scene.fog.color.setHex(m.fog);
     sun.color.setHex(m.sun);
     sun.intensity = m.sunI;
+    sun.position.set(m.sunPos[0], m.sunPos[1], m.sunPos[2]);
     hemi.intensity = m.hemiI;
     sunBall.material.color.setHex(m.ball);
     if (world.glintMat) world.glintMat.opacity = m.glint;
@@ -752,13 +770,14 @@ export function buildWorld(scene) {
     b.textAlign = 'center';
     b.fillStyle = '#ff5fa2';
     b.font = '900 84px sans-serif';
-    b.fillText('MARINA', 256, 110);
+    b.fillText('MARINA', 256, 104);
     b.fillStyle = '#ffd24a';
     b.font = '900 84px sans-serif';
-    b.fillText('VERDE', 256, 196);
+    b.fillText('VERDE', 256, 188);
+    // Polish 2 Q3: the board is the Verde FM neon billboard now.
     b.fillStyle = '#9fd8e8';
     b.font = '700 30px sans-serif';
-    b.fillText('· FULL TIDE ·', 256, 236);
+    b.fillText('· VERDE FM 88.1 ·', 256, 234);
     const bTex = new THREE.CanvasTexture(bc);
     bTex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(
@@ -809,6 +828,22 @@ export function buildWorld(scene) {
     scene.add(palm);
     world.palms.push(palm);
   }
+  // Polish 2 Q4: tall framing palms flanking the cover shot's palm gap
+  // (x 24-48, z 176): 1.45x taller, framing the chase instead of blocking
+  // it. A dedicated seeded rand keeps the world RNG stream untouched.
+  {
+    const tallRand = mulberry32(CITY.SEED + 101);
+    for (const tx of [-12, 12, 72, 96]) {
+      const palm = makePalm(tallRand);
+      palm.scale.y = 1.45;
+      palm.position.set(tx, 0, 176);
+      scene.add(palm);
+      world.palms.push(palm);
+    }
+  }
+  // Polish 2 Q9: ferris wheel landmark on the west beach (static, a few
+  // batched meshes — visible from the beachfront road and the cover shot).
+  buildFerrisWheel(scene, colliders, -138, 208);
   // Random palms on sidewalks elsewhere (fewer, for the draw-call budget).
   for (let i = 0; i < 12; i += 1) {
     const palm = makePalm(rand);
@@ -944,6 +979,29 @@ export function buildWorld(scene) {
     }
   }
 
+  // Polish 2 Q3: light pools under the beachfront lamps — ONE InstancedMesh
+  // of additive quads (a decal, NOT a PointLight per lamp), depthWrite off.
+  {
+    const poolGeo = new THREE.PlaneGeometry(7, 7);
+    const poolMat = new THREE.MeshBasicMaterial({
+      color: 0xffe9a0, transparent: true, opacity: 0.22,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    });
+    const xs = [-156, -52, 52, 156];
+    const pools = new THREE.InstancedMesh(poolGeo, poolMat, xs.length);
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+    xs.forEach((x, i) => {
+      m4.compose(new THREE.Vector3(x, 0.06, 189), q, new THREE.Vector3(1, 1, 1));
+      pools.setMatrixAt(i, m4);
+    });
+    pools.count = xs.length;
+    pools.instanceMatrix.needsUpdate = true;
+    pools.computeBoundingSphere();
+    scene.add(pools);
+    world.lightPools = pools;
+  }
+
   // --- Ocean buoys + a distant sailboat ------------------------------------
   for (let i = 0; i < 6; i += 1) {
     const buoy = new THREE.Mesh(
@@ -981,7 +1039,18 @@ export function buildWorld(scene) {
       if (o.userData.batchKey === 'umbTop') return 'white';
       const m = o.material;
       const col = m.color ? m.color.getHexString() : 'nocol';
-      return `${m.type}|${col}|${m.map ? m.map.uuid : ''}|${m.emissiveMap ? m.emissiveMap.uuid : ''}`;
+      return `${m.type}|${col}|${m.map ? m.map.uuid : ''}|${m.emissiveMap ? m.emissiveMap.uuid : ''}|${m.transparent ? 1 : 0}|${m.opacity}`;
+    };
+    // Polish 2 Q10 (Sol correctness): the batch identity is geometry +
+    // material + castShadow + receiveShadow + renderOrder. Geometry is
+    // keyed by type + parameters (NOT uuid: every `new BoxGeometry` gets
+    // its own uuid, which would split identical boxes into own batches).
+    // 'cloud' / 'palmTrunk' are exempt: their per-instance size lives in
+    // unitR/unitH and the batch uses ONE unit geometry for all of them.
+    const geoSig = (o) => {
+      if (o.userData.batchKey === 'cloud' || o.userData.batchKey === 'palmTrunk') return 'unit';
+      const g = o.geometry;
+      return `${g.type}|${JSON.stringify(g.parameters ?? {})}`;
     };
     const groups = new Map();
     const doomed = [];
@@ -989,7 +1058,7 @@ export function buildWorld(scene) {
       if (!o.isMesh || !o.userData.batchKey) return;
       o.updateWorldMatrix(true, false);
       const wp = o.getWorldPosition(new THREE.Vector3());
-      const key = `${o.userData.batchKey}|${zoneOf(wp.x, wp.z)}|${matSig(o)}`;
+      const key = `${o.userData.batchKey}|${zoneOf(wp.x, wp.z)}|${matSig(o)}|${geoSig(o)}|${o.castShadow ? 1 : 0}${o.receiveShadow ? 1 : 0}|${o.renderOrder}`;
       let g = groups.get(key);
       if (!g) {
         g = {

@@ -34,7 +34,7 @@ export function policeDemand(stars) {
 // Callsigns for the MVPD RESPONSE panel (DESIGN §10.2): UNIT 11, UNIT 12, …
 let _callsign = 10;
 export function spawnPoliceCar(scene, x, z, heading) {
-  const car = createCar(x, z, heading, 0xf2f2f2, true);
+  const car = createCar(x, z, heading, 0xf2f2f2, true, 'sedan', { glow: true });
   car.driver = 'police';
   car.callsign = `UNIT ${String((_callsign += 1)).padStart(2, '0')}`;
   car.ai = { speed: 0, ram: 0 };

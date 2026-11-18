@@ -13,6 +13,7 @@ import { PLACES, SHOPS } from './config.js';
 import { startMission } from './missions.js';
 import { giveWeapon } from './weapons.js';
 import { showDialog } from './hud.js';
+import { getShotPreset } from './graphics-polish.js';
 
 function placePlayer(game, x, z, heading) {
   game.playerX = x;
@@ -30,6 +31,63 @@ function noBanner(game) {
 export function stageShot(name, game, ctx) {
   const { enterCar, spawnPoliceIfNeeded, spawnRivals, spawnRivalsAt, spawnSportsCoupe, spawnHeliIfNeeded, audio, world, hud, openShop, openMap } = ctx;
   game.time = 0;
+
+  if (name === 'beach') {
+    // Capture-only coastal day shot (concept 2): the VELOCE GT on the
+    // beachfront road heading WEST toward the ferris wheel, palms left,
+    // sea right, one police car + a yellow taxi ahead. NOT one of the 4
+    // dossier shots. stepState.started is set so the mission-12 setup
+    // (5 stars + heli) does not override the staged 2 stars.
+    world.setSkyMode('day');
+    game.clock = 14 * 60 + 31;
+    startMission(game.missions, game, 11);
+    game.missions.stepState.started = true;
+    noBanner(game);
+    const car = spawnSportsCoupe();
+    car.x = 118;
+    car.z = 182;
+    car.heading = -Math.PI / 2;
+    car.mesh.position.set(118, 0, 182);
+    car.mesh.rotation.y = -Math.PI / 2;
+    placePlayer(game, 118, 178, -Math.PI / 2);
+    enterCar(car);
+    game.playerCar.speed = 8;
+    game.playerCar.health = 100;
+    game.wanted.stars = 2;
+    game.wanted.heat = 0;
+    spawnPoliceIfNeeded();
+    game.policeCars.forEach((pc, i) => {
+      // Ahead of the player (west), in the camera's field of view — the
+      // camera sits EAST of the car looking west, so cars staged east
+      // would fill the lens.
+      pc.x = game.playerX - 14 - i * 8;
+      pc.z = game.playerZ + (i === 0 ? 2.4 : -2.4);
+      pc.heading = -Math.PI / 2;
+      pc.speed = 12;
+      pc.mesh.position.set(pc.x, 0, pc.z);
+      pc.mesh.rotation.y = pc.heading;
+    });
+    game.trafficCars.slice(0, 1).forEach((tc) => {
+      tc.x = 62;
+      tc.z = 184.4;
+      tc.heading = -Math.PI / 2;
+      tc.speed = 10;
+      tc.ai.axis = 'x';
+      tc.ai.dir = -1;
+      tc.mesh.userData.bodyMat.color.setHex(0xf2c230);
+      tc.mesh.position.set(tc.x, 0, tc.z);
+      tc.mesh.rotation.y = tc.heading;
+    });
+    game.ledger.rep = 2;
+    game.radio.station = 0; // Verde FM
+    game.money = 45320;
+    const preset = getShotPreset('chase-cover');
+    game.cameraDistOverride = preset.dist;
+    game.cameraPitch = preset.pitch;
+    game.cameraYaw = -Math.PI / 2; // behind the car, looking west
+    game.objective = 'Coastal day — Beachfront, ferris wheel ahead';
+    return;
+  }
 
   if (name === 'chase') {
     // On-foot night neon (SCREENSHOTS.md §4.2): Nico on foot downtown at
@@ -86,8 +144,10 @@ export function stageShot(name, game, ctx) {
   if (name === 'street') {
     // Verde Arms open over the street (SCREENSHOTS.md §4.3): mission 3,
     // Nico at the gun shop door, the real shop UI open, cash line visible.
+    // Polish 2: bright midday (14:31, like the coastal-day concept) so the
+    // street reads as siang cerah, not dusk.
     world.setSkyMode('day');
-    game.clock = 16 * 60 + 40;
+    game.clock = 14 * 60 + 31;
     startMission(game.missions, game, 2);
     noBanner(game);
     placePlayer(game, -48.2, -74, Math.PI);
@@ -162,24 +222,25 @@ export function stageShot(name, game, ctx) {
   game.wanted.stars = 4;
   game.wanted.heat = 0;
   spawnHeliIfNeeded();
-  game.heli.angle = 2.4; // in front of the chase cam (cameraYaw -0.83 looks
-  // west-northwest): angle 0.35 puts the heli BEHIND the camera
-  game.heli.height = 8; // low enough to sit inside the frame, not at its edge
+  game.heli.angle = 0.45; // ahead-right of the chase cam (looking east):
+  // the heli must be IN the frame, not behind the camera
+  game.heli.height = 12; // high enough to read as a helicopter, low enough to stay in frame
   spawnPoliceIfNeeded();
-  // Pull the police in close behind the player for a real chase frame:
-  // a tight echelon on the road, all inside the new camera's field of view.
+  // Police AHEAD of the player (east, in the camera's field of view) in a
+  // tight echelon — the chase cam sits WEST of the car looking east, so
+  // cars staged behind the player would be behind the lens. This matches
+  // the top-1 cover composition (police ahead of the hero car).
   game.policeCars.forEach((pc, i) => {
-    pc.x = game.playerX - 8 - i * 6;
+    pc.x = game.playerX + 12 + i * 7;
     pc.z = game.playerZ + (i === 1 ? -2 : 2);
     pc.heading = Math.PI / 2;
     pc.speed = 24;
     pc.mesh.position.set(pc.x, 0, pc.z);
     pc.mesh.rotation.y = pc.heading;
   });
-  // Two traffic cars on the same road, on the camera's side (west) — east
-  // of the player is outside this camera's field of view.
+  // Two traffic cars on the same road, ahead of the player.
   game.trafficCars.slice(0, 2).forEach((tc, i) => {
-    tc.x = game.playerX - 30 - i * 22;
+    tc.x = game.playerX + 45 + i * 20;
     tc.z = 182 + (i === 0 ? 2.4 : -2.4);
     tc.heading = Math.PI / 2;
     tc.speed = 10;
@@ -188,10 +249,10 @@ export function stageShot(name, game, ctx) {
     tc.mesh.position.set(tc.x, 0, tc.z);
     tc.mesh.rotation.y = tc.heading;
   });
-  // A few pedestrians on the sidewalk by the road, in frame left.
+  // A few pedestrians on the beach-side sidewalk ahead, in frame right.
   game.peds.slice(0, 3).forEach((p, i) => {
-    p.x = 26 + i * 4;
-    p.z = 178;
+    p.x = 55 + i * 4;
+    p.z = 188;
     p.mesh.position.set(p.x, 0, p.z);
   });
   // Mid-game loadout for the weapon slots + ledger for the REP bar.
@@ -207,9 +268,12 @@ export function stageShot(name, game, ctx) {
   // 600 s: the dialog must still be up when the capture lands — __shotReady
   // takes >8 real seconds on swiftshader, and the timer is real-time.
   showDialog(hud, 'Rosa', 'The whole force is coming. Drive to the yacht — don\'t stop for anything.', 600);
-  game.cameraYaw = Math.PI / 2 - 2.07; // look south-southwest: car + heli +
-  // beach + sunset in frame, camera clear of the palm line (z=176)
-  game.cameraPitch = 0.14; // lower camera: the coupe sits higher in frame,
-  // clear of the dialog bar instead of half under it
+  game.cameraYaw = Math.PI / 2; // TRUE chase cam: directly behind the car,
+  // looking east down the beachfront road (top-1 composition)
+  // Polish 2 Q2: the low chase-cover preset applies ONLY in this capture
+  // mode (game.shotMode === 'cover'); gameplay keeps its own camera.
+  const coverPreset = getShotPreset('chase-cover');
+  game.cameraDistOverride = coverPreset.dist;
+  game.cameraPitch = coverPreset.pitch;
   game.objective = '12 · Grand Getaway: Reach the yacht at the marina — with the law on your tail';
 }

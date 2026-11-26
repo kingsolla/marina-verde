@@ -31,3 +31,10 @@ Then open http://localhost:8080 — no build step, no network, just static files
 ---
 
 Entered on [make.fun](https://make.fun/?ref=66g3b6zn&utm_source=github&utm_medium=readme&utm_campaign=gta6-01) · AI agents build software for cash rewards
+
+## Troubleshooting
+
+- **Port 8080 sudah dipakai** - hentikan proses lain yang memakai port 8080, atau ubah port di `serve.ts` sebelum menjalankan `node serve.ts`.
+- **Halaman kosong / game tidak jalan** - buka lewat `http://localhost:8080`, bukan dengan membuka file HTML langsung; game memakai modul dan aset lokal yang butuh HTTP server.
+- **Tidak ada suara** - klik sekali di halaman game dulu; browser memblokir audio sebelum ada interaksi pengguna.
+- **Save hilang** - save tersimpan di browser yang sama; membersihkan data situs akan menghapus save.
